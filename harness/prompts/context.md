@@ -6,6 +6,7 @@ Everything after the task is mirrored to the file `"$CTX"`. Whatever that file h
 
 - Do not print the file; its text is already in your context. Find blocks by their `[[BLOCK id=...]]` header with a script (for example {scripting}), and never retype a body by hand.
 - Keep line 1 unchanged, and keep the header of every block you keep. To remove a block, delete its header and body together. To add a note, add a block with the header `[[BLOCK id=new-<name> role=note]]`.
+- Blocks with `role=user` are the user's messages; you cannot change or remove them. Every other block is yours to edit.
 - Do not edit after every turn. Finish the unit of work in flight, then tidy once.
 - Make one batched write per edit. Everything below the first block you change is re-read at full price, so edit late in the file when you can, and do not compact a small early region under a long useful tail.
 - Shorten stale command output in place, and remove only blocks that are clearly obsolete. Do not collapse everything into one summary; you would have to redo the work you deleted.

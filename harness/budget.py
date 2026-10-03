@@ -85,7 +85,7 @@ class Nudger:
 def rollback(
     ctx: Context, system: str, est: Estimator, cfg: Config, consecutive: int, attempt: int
 ) -> list[Block]:
-    """Drop the newest non-user blocks until the context fits, and pin a note about it.
+    """Drop the newest droppable blocks until the context fits, and pin a note about it.
 
     Returns the dropped blocks; empty means nothing could be dropped.
     """
@@ -97,7 +97,7 @@ def rollback(
     dropped: list[Block] = []
     while context_tokens(ctx, system, est) > target:
         idx = next(
-            (i for i in range(len(ctx.blocks) - 1, -1, -1) if not ctx.blocks[i].protected),
+            (i for i in range(len(ctx.blocks) - 1, -1, -1) if ctx.blocks[i].droppable),
             None,
         )
         if idx is None:

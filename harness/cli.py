@@ -50,10 +50,60 @@ def cmd_undo(args: argparse.Namespace) -> int:
     return 0
 
 
+def _claude(cfg):
+    from .llm import ClaudeModel  # imported late so `log` and `undo` work without credentials
+
+    return ClaudeModel(cfg)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
-    print("`harness run` needs the live model call, which is Phase 2 and not built yet.",
+    from .baseline import make_compactor
+    from .config import Config
+    from .loop import run
+
+    overrides = {"mode": args.mode, "confirm": args.confirm}
+    if args.budget:
+        overrides["budget_tokens"] = args.budget
+    if args.max_steps:
+        overrides["max_steps"] = args.max_steps
+    if args.max_cost:
+        overrides["max_cost_usd"] = args.max_cost
+    cfg = Config(**overrides)
+    try:
+        model = _claude(cfg)
+    except Exception as e:
+        print(f"could not create the Claude client: {e}", file=sys.stderr)
+        print("Set ANTHROPIC_API_KEY and retry.", file=sys.stderr)
+        return 2
+    compactor = make_compactor(model.summarise) if cfg.mode == "baseline" else None
+    result = run(args.task, Path(args.dir), cfg, model, compactor=compactor)
+    print(result.answer)
+    if "authentication method" in result.answer:
+        print("No Anthropic credential found. Set ANTHROPIC_API_KEY and retry.", file=sys.stderr)
+    print(f"[{result.status}] ${result.usage.cost():.4f}  session: {result.session_dir}",
           file=sys.stderr)
-    return 2
+    return 0 if result.status == "finished" else 1
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    from bench.run import report, run_matrix
+
+    out = Path(args.out)
+    run_matrix(
+        tasks=args.tasks.split(","), modes=args.modes.split(","),
+        seeds=[int(s) for s in args.seeds.split(",")], pressure=args.pressure,
+        ceiling_usd=args.ceiling, out_dir=out, make_model=_claude,
+        max_cost_per_run=args.max_cost,
+    )
+    print(report(out / "results.csv"))
+    return 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    from bench.run import report
+
+    print(report(Path(args.csv)))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -63,13 +113,31 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("run", help="run a task (Phase 2)")
+    p = sub.add_parser("run", help="run a task with Claude")
     p.add_argument("task")
-    p.add_argument("--dir", default=".")
+    p.add_argument("--dir", default=".", help="directory to work in")
     p.add_argument("--mode", choices=("clm", "baseline"), default="clm")
-    p.add_argument("--budget", type=int)
-    p.add_argument("--confirm", action="store_true")
+    p.add_argument("--budget", type=int, help="context budget in tokens (default 32000)")
+    p.add_argument("--max-steps", type=int)
+    p.add_argument("--max-cost", type=float, help="stop the run at this many dollars")
+    p.add_argument("--confirm", action="store_true", help="approve each command first")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("bench", help="run the benchmark matrix")
+    p.add_argument("--tasks", default="kv,ledger")
+    p.add_argument("--modes", default="clm,baseline")
+    p.add_argument("--seeds", default="1,2,3")
+    p.add_argument("--pressure", type=float, default=3.0,
+                   help="total input as a multiple of the context budget")
+    p.add_argument("--ceiling", type=float, required=True,
+                   help="total dollars the whole matrix may spend")
+    p.add_argument("--max-cost", type=float, default=8.0, help="dollar cap per run")
+    p.add_argument("--out", default="bench_out")
+    p.set_defaults(func=cmd_bench)
+
+    p = sub.add_parser("report", help="summarise a benchmark results.csv")
+    p.add_argument("csv")
+    p.set_defaults(func=cmd_report)
 
     p = sub.add_parser("log", help="print a turn-by-turn summary of a session")
     p.add_argument("session")
