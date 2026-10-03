@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from .env import load_dotenv
 from .session import undo
 
 
@@ -79,7 +80,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     result = run(args.task, Path(args.dir), cfg, model, compactor=compactor)
     print(result.answer)
     if "authentication method" in result.answer:
-        print("No Anthropic credential found. Set ANTHROPIC_API_KEY and retry.", file=sys.stderr)
+        print("No Anthropic credential found. Put ANTHROPIC_API_KEY in the project's .env file "
+              "(see .env.example) or in your environment, then retry.", file=sys.stderr)
     print(f"[{result.status}] ${result.usage.cost():.4f}  session: {result.session_dir}",
           file=sys.stderr)
     return 0 if result.status == "finished" else 1
@@ -150,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_undo)
 
     args = parser.parse_args(argv)
+    load_dotenv()
     return args.func(args)
 
 
