@@ -21,7 +21,7 @@ class ModelReply:
     thinking: str = ""
     command: str | None = None
     restart: bool = False
-    stop_reason: str = "end_turn"  # tool_use | end_turn | max_tokens | refusal
+    stop_reason: str = "end_turn"  # tool_use | end_turn | max_tokens | refusal | invalid_tool
     usage: Usage = field(default_factory=Usage)
     served_by: str = ""
 
@@ -102,7 +102,7 @@ def run(
 
     session.event("start", 0, task=task, mode=cfg.mode, model=cfg.model, limit=cfg.limit)
     if driver and (first := driver.start()):
-        add("user", first)
+        add("input", first)
 
     step = calls = turn = 0
     free_in_row = refused_in_row = truncated_in_row = 0
@@ -157,7 +157,11 @@ def run(
             session.ctx_path.write_text(rendered, encoding="utf-8", newline="\n")
 
         raw_request = raw_context(ctx, system)
-        reply = model.reply(system, ctx)
+        try:
+            reply = model.reply(system, ctx)
+        except Exception as e:  # an API failure must still leave a finished session on disk
+            answer = f"model call failed: {type(e).__name__}: {e}"
+            break
         calls += 1
         session.bump("model_calls")
         session.add_usage(reply.usage)
@@ -182,6 +186,14 @@ def run(
                 "Your last reply was cut off at the output limit and its command was not run. "
                 "Reply more briefly.",
             )
+            session.event("notice", turn, id=nb.id, text=nb.body)
+            continue
+        if reply.stop_reason == "invalid_tool":
+            truncated_in_row += 1
+            if truncated_in_row > 2:
+                answer = "the bash call had invalid input three times in a row"
+                break
+            nb = add("notice", "Your bash call had invalid input. Call bash with a `command` string.")
             session.event("notice", turn, id=nb.id, text=nb.body)
             continue
         truncated_in_row = 0
@@ -286,7 +298,7 @@ def run(
             refused_in_row = 0
 
         if driver and (nxt := driver.after_command(command, observation)):
-            add("user", nxt)
+            add("input", nxt)
 
     session.event("finish", turn, status=status, answer=answer)
     session.write_usage(status)

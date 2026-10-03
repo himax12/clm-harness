@@ -115,3 +115,9 @@ def test_margin_grows_after_repeated_rollbacks(est):
     rollback(first, "", est, CFG, consecutive=1, attempt=1)
     rollback(later, "", est, CFG, consecutive=5, attempt=5)
     assert context_tokens(later, "", est) < context_tokens(first, "", est)
+
+
+def test_rollback_never_drops_task_input(est):
+    ctx = make_ctx(("input", "i" * 60_000), ("output", "small"))
+    dropped = rollback(ctx, "", est, CFG, consecutive=1, attempt=1)
+    assert [b.role for b in dropped] == ["output"] and ctx.blocks[0].role == "input"

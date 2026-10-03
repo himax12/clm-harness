@@ -31,14 +31,21 @@ def _sanitise(body: str) -> str:
 @dataclass
 class Block:
     id: str
-    role: str  # assistant | output | user | notice | note
+    role: str  # assistant | output | user | input | notice | note
     body: str
     seq: int
     command: str | None = None  # assistant blocks only; survives edits to the body
 
     @property
     def protected(self) -> bool:
+        """The model may not change or remove it."""
         return self.role == "user"
+
+    @property
+    def droppable(self) -> bool:
+        """Rollback may discard it. Task input is editable by the model but never
+        dropped by the harness, since dropping it would silently lose part of the task."""
+        return self.role not in ("user", "input")
 
 
 class Context:

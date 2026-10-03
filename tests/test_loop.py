@@ -203,10 +203,10 @@ class TwoOps:
         return None
 
 
-def test_driver_feeds_operations_as_user_blocks(workdir):
+def test_driver_feeds_operations_as_input_blocks(workdir):
     model = ScriptedModel([run_command("echo READY"), ModelReply(text="done")])
     run("t", workdir, Config(), model, driver=TwoOps())
-    assert "role=user" in model.seen[0] and "first operation" in model.seen[0]
+    assert "role=input" in model.seen[0] and "first operation" in model.seen[0]
     assert "second operation" in model.seen[1]
 
 
@@ -238,3 +238,27 @@ def test_log_and_undo_commands(workdir, capsys):
 
     assert cli(["undo", str(result.session_dir)]) == 0
     assert "\n299\n" in (result.session_dir / "LIVE_CTX.md").read_text(encoding="utf-8")
+
+
+def test_model_can_edit_task_input_but_rollback_never_drops_it(workdir):
+    model = ScriptedModel([run_command(shrink("b0001", "op stored in ops.txt")),
+                           ModelReply(text="done")])
+    result = run("t", workdir, Config(), model, driver=TwoOps())
+    assert len(events(result, "edit_applied")) == 1
+    assert "op stored in ops.txt" in model.seen[1]
+
+
+def test_failed_model_call_still_finishes_the_session(workdir):
+    def boom(system, ctx):
+        raise RuntimeError("network down")
+
+    result = run("t", workdir, Config(), ScriptedModel([boom]))
+    assert result.status == "error" and "network down" in result.answer
+    assert usage(result)["status"] == "error"
+
+
+def test_invalid_tool_input_is_reprompted(workdir):
+    bad = ModelReply(stop_reason="invalid_tool")
+    model = ScriptedModel([bad, ModelReply(text="done")])
+    assert run("t", workdir, Config(), model).status == "finished"
+    assert "invalid input" in model.seen[1]

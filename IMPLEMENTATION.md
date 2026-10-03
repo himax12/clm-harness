@@ -610,3 +610,15 @@ Made while building Phase 1:
 - The prompt names a scripting tool that was checked to work in the shell. On Windows `python3` is often a Store stub, so the harness tries `python3`, then `python`, and falls back to `perl`.
 - A body line that looks like a block header (for example when a command prints the context file) is escaped when the block is created, so it cannot be parsed as a real header later.
 - An edit that leaves every block identical is reported as unchanged, not applied, so it cannot earn a free turn.
+
+Made while building Phases 2 and 3:
+
+- A sixth block role, `input`, carries operations fed by a task driver. The model may edit or remove it (the key-value task depends on moving a batch out of context), but rollback never drops it. `user` stays reserved for the user's own messages, which the model cannot change.
+- A bash call with unusable input is reported as stop reason `invalid_tool`; the loop adds a notice and asks again, stopping after three in a row.
+- An exception from the model call ends the run with status `error` and still writes `usage.json` and the `finish` event.
+- Both benchmark tasks use one answer format, `<<<ANSWER id>>> value <<<ANSWER END>>>`, scored from the model's reply text or command. The id is the key for the key-value task and the query id (`q07`) for the ledger.
+- Key-value values are three seven-word clauses plus a three-word tail (24 words) and a tag.
+- Ledger batches hold 200 transfers, with a query after every third batch, so that 3× pressure gives 22 queries in 91 operations.
+- Benchmark runs use `max_steps=400` and a one-hour wall clock, since a stream has 47 to 91 operations.
+- `harness report <csv>` prints the per-task, per-mode summary; `bench/report.py` was folded into `bench/run.py`.
+- The summarise call in baseline mode goes through `ClaudeModel.summarise`, injected into the compactor, so `baseline.py` does not import the SDK.
