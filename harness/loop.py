@@ -11,6 +11,7 @@ from .budget import Estimator, Nudger, context_tokens, raw_context, rollback
 from .config import Config
 from .context import Context, apply_edit, receipt, render, render_block
 from .session import Session, Usage
+from .redact import Redactor, removed_names, secret_values
 from .shell import Shell, cap_to_room, format_observation
 
 PROMPTS = Path(__file__).parent / "prompts"
@@ -111,7 +112,11 @@ def run(
         session.save_block(block)
         return block
 
-    session.event("start", 0, task=task, mode=cfg.mode, model=cfg.model, limit=cfg.limit)
+    redact = Redactor(secret_values(workdir, cfg.env_passthrough))
+    session.event(
+        "start", 0, task=task, mode=cfg.mode, model=cfg.model, limit=cfg.limit,
+        env_removed=len(removed_names(cfg.env_passthrough)), secrets_redacted=len(redact.values),
+    )
     if driver and (first := driver.start()):
         add("input", first)
 
@@ -228,6 +233,8 @@ def run(
             observation = "[command declined by user]"
         else:
             result = shell.run(command)
+            # Before the output reaches the context, the transcript or a saved file.
+            result.output = redact(result.output)
             quiet = result.exit_code == 0 and not result.output.strip()
             observation = format_observation(result, name, outputs_dir, cfg)
             session.event(

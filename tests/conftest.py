@@ -6,6 +6,12 @@ from harness.context import Context
 from harness.shell import Shell
 
 
+@pytest.fixture(autouse=True)
+def no_real_dotenv(monkeypatch):
+    """Tests must never load the developer's real API key from the project's .env."""
+    monkeypatch.setattr("harness.cli.load_dotenv", lambda: [])
+
+
 @pytest.fixture
 def workdir(tmp_path):
     # A space in the path on purpose: the real project path has them.

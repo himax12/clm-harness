@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .budget import Estimator
 from .config import Config
+from .redact import command_env
 
 
 @dataclass
@@ -49,11 +50,6 @@ def to_posix(path: Path) -> str:
 
 def _q(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
-
-
-def _command_env() -> dict[str, str]:
-    # The agent's commands must not be able to read the API credential the harness runs on.
-    return {k: v for k, v in os.environ.items() if not k.upper().startswith("ANTHROPIC_")}
 
 
 def _write(path: Path, text: str) -> None:
@@ -124,7 +120,7 @@ class Shell:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
-            env=_command_env(),
+            env=command_env(self.cfg.env_passthrough),
             **kwargs,
         )
         timed_out = False

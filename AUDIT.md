@@ -14,11 +14,17 @@ Audited on 3 October 2026 at commit `1707c7d` (branch `phase-2-3`).
 
 Statuses come from checks run on the repo on the audit date (file presence, a scan of git history, a wheel build, two shell experiments, the pilot benchmark results) and from what the tests and live runs had already established. When an item is fixed, change its status here and note the commit.
 
+## Changes since the audit
+
+| Date | Items | Change |
+|---|---|---|
+| 3 Oct 2026 | A5, A9 fixed; A6, A8 mitigated | Secret-looking environment variables are removed from the agent's commands; known secret values and common key formats are redacted from command output; `harness doctor` added; `run` warns about a `.env` in the working folder. The summary counts below reflect this. |
+
 ## Summary
 
 | Category | Done | Partial | Missing | Total |
 |---|---|---|---|---|
-| A. Secrets and authentication | 5 | 2 | 4 | 11 |
+| A. Secrets and authentication | 7 | 3 | 1 | 11 |
 | B. Command execution safety | 5 | 2 | 6 | 13 |
 | C. Data handling and privacy | 1 | 1 | 4 | 6 |
 | D. Prompt injection and trust | 3 | 1 | 2 | 6 |
@@ -36,7 +42,7 @@ Statuses come from checks run on the repo on the audit date (file presence, a sc
 | P. Repository and release | 3 | 1 | 4 | 8 |
 | Q. Observability | 4 | 0 | 3 | 7 |
 | R. Community | 0 | 0 | 4 | 4 |
-| **Total** | **54** | **32** | **67** | **153** |
+| **Total** | **56** | **33** | **64** | **153** |
 
 ## Launch blockers, in order
 
@@ -44,7 +50,7 @@ Statuses come from checks run on the repo on the audit date (file presence, a sc
 |---|---|---|
 | 1 | No LICENSE file; without one the code is all-rights-reserved | O1 |
 | 2 | No README with install, quickstart and a safety warning | N2 |
-| 3 | The agent runs arbitrary commands with the user's full permissions and inherits every non-Anthropic secret in the environment | A5, A6, B4, B5 |
+| 3 | The agent runs arbitrary commands with the user's full permissions and can read secret files on disk | A6, A7, B4, B5 |
 | 4 | Session folders are not auto-ignored in target repos, so transcripts can be committed by accident | C2 |
 | 5 | The baseline benchmark run ended in an API refusal, so there is no valid comparison | M4, M5 |
 | 6 | No CI, lint or type checks | L5, L6 |
@@ -63,11 +69,11 @@ Statuses come from checks run on the repo on the audit date (file presence, a sc
 | A2 | `.env` ignored by git; `.env.example` committed | Done | Verified with `git check-ignore` |
 | A3 | No key in git history | Done | Scanned all branches: 0 matches |
 | A4 | Key hidden from the agent's commands | Done | `ANTHROPIC_*` stripped; tested |
-| A5 | Other secrets hidden from the agent's commands | Missing | Any `*_TOKEN`, `*_KEY`, AWS or GitHub variable passes through; needs an allowlist |
-| A6 | Agent cannot read a `.env` in its working folder | Missing | `--dir` at the project root lets it `cat .env` |
-| A7 | Agent cannot read `~/.ssh`, `~/.aws`, git credentials | Missing | No file confinement |
-| A8 | Secrets never written to transcripts | Partial | The harness never logs the key; anything the agent prints is stored in plain text |
-| A9 | Credential check before a run (`harness doctor`) | Missing | Failure only shows on the first API call |
+| A5 | Other secrets hidden from the agent's commands | Done | Secret-looking variables (`*TOKEN*`, `*SECRET*`, `*PASSWORD*`, `*_KEY`, `*_AUTH_*` and similar) are removed; `--pass-env NAME` opts one back in; tested |
+| A6 | Agent cannot read a `.env` in its working folder | Partial | Still readable. Mitigated: its values are redacted from command output, and `run` and `doctor` warn when one is present. Needs a sandbox to close |
+| A7 | Agent cannot read `~/.ssh`, `~/.aws`, git credentials | Missing | No file confinement; needs a sandbox (B4, B5) |
+| A8 | Secrets never written to transcripts | Partial | Removed variables' values, `.env` values and common key formats are redacted before output is stored or sent. A secret in any other file or format is not |
+| A9 | Credential check before a run (`harness doctor`) | Done | Checks shell, scripting tool, credential and API access via free token counting; verified live |
 | A10 | `.env` does not override the real environment | Done | Tested |
 | A11 | Other auth methods (profiles, Bedrock, Vertex) | Partial | The SDK supports profiles; never tried |
 

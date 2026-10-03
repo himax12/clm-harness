@@ -10,6 +10,7 @@ A bash-only coding-agent harness in which Claude manages its own context by edit
 uv sync                         install
 uv run pytest -q                all tests (about 45 s; shell tests run real Git Bash)
 uv run pytest tests/test_context.py -q
+uv run harness doctor           check the shell and the API credential; spends nothing
 uv run harness run "<task>" --dir <folder> [--mode clm|baseline] [--budget N] [--max-cost D]
 uv run harness log <session-dir>
 uv run harness undo <session-dir>
@@ -33,6 +34,7 @@ harness/
   llm.py        the Claude request and response parsing (the only SDK import)
   baseline.py   clear-then-summarise compaction, the comparison mode
   env.py        loads .env
+  redact.py     hides secret variables from commands; redacts secrets in output
   cli.py        the commands above
   prompts/      system.md, context.md, summarise.md
 bench/          key-value and ledger streams, driver, scorer, run matrix
@@ -43,7 +45,7 @@ Session data is written to `<workdir>/.ctx/sessions/<id>/` and benchmark output 
 
 ## Rules that are easy to break
 
-- **Never read, print or commit `.env`.** It holds the API key. The harness loads it itself. Commands the agent runs do not inherit `ANTHROPIC_*` variables; keep it that way.
+- **Never read, print or commit `.env`.** It holds the API key. The harness loads it itself. Commands the agent runs do not inherit secret-looking variables, and known secret values are redacted from command output before it is stored or sent (`harness/redact.py`); keep both in place.
 - **Do not spend money without the user's say.** Run the benchmark only with an agreed `--ceiling`. Use `ScriptedModel` or a fake client for anything that can be tested without the API.
 - **Nothing in a request may change between turns unless the model changed it.** Prompt caching depends on the unedited prefix being byte-identical. In particular:
   - no request block may end in whitespace (the API trims the final block, so it would never match its own cache entry on the next turn);

@@ -27,6 +27,8 @@ class Config:
     max_free_edits_in_row: int = 3
     max_refused_edits_in_row: int = 3
     confirm: bool = False
+    # Secret-looking environment variables the agent's commands may see after all.
+    env_passthrough: tuple[str, ...] = ()
 
     @property
     def limit(self) -> int:

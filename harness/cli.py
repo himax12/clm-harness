@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .env import load_dotenv
+from .redact import dotenv_files
 from .session import undo
 
 
@@ -62,7 +63,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     from .config import Config
     from .loop import run
 
-    overrides = {"mode": args.mode, "confirm": args.confirm}
+    overrides = {"mode": args.mode, "confirm": args.confirm,
+                 "env_passthrough": tuple(args.pass_env or ())}
     if args.budget:
         overrides["budget_tokens"] = args.budget
     if args.max_steps:
@@ -76,6 +78,10 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"could not create the Claude client: {e}", file=sys.stderr)
         print("Set ANTHROPIC_API_KEY and retry.", file=sys.stderr)
         return 2
+    for path in dotenv_files(Path(args.dir)):
+        print(f"warning: {path} holds secrets the agent could read. Its values are redacted "
+              "from command output, but a command can still open the file. Use --confirm, or "
+              "work in a folder without it.", file=sys.stderr)
     compactor = make_compactor(model.summarise) if cfg.mode == "baseline" else None
     result = run(args.task, Path(args.dir), cfg, model, compactor=compactor)
     print(result.answer)
@@ -85,6 +91,56 @@ def cmd_run(args: argparse.Namespace) -> int:
     print(f"[{result.status}] ${result.usage.cost():.4f}  session: {result.session_dir}",
           file=sys.stderr)
     return 0 if result.status == "finished" else 1
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Check that a run can start: shell, scripting tool, credential. Spends nothing."""
+    import os
+    import tempfile
+
+    from .config import Config
+    from .redact import removed_names
+    from .shell import Shell, find_bash
+
+    ok = True
+
+    def report(good: bool, label: str, detail: str) -> None:
+        nonlocal ok
+        ok = ok and good
+        print(f"{'ok  ' if good else 'FAIL'}  {label}: {detail}")
+
+    cfg = Config()
+    report(sys.version_info >= (3, 12), "python", sys.version.split()[0])
+    try:
+        bash = find_bash()
+        report(True, "bash", bash)
+        with tempfile.TemporaryDirectory() as tmp:
+            hint = Shell(Path(tmp), Path(tmp) / "session", cfg).scripting_hint()
+        report(True, "scripting tool for context edits", hint.replace("`", ""))
+    except Exception as e:
+        report(False, "bash", str(e))
+
+    source = next((n for n in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN") if os.environ.get(n)),
+                  None)
+    report(source is not None, "credential", f"found in {source}" if source
+           else "not set; put ANTHROPIC_API_KEY in .env (see .env.example)")
+    if source and not args.offline:
+        try:
+            import anthropic
+
+            # Token counting validates the key and the model id and costs nothing.
+            anthropic.Anthropic().messages.count_tokens(
+                model=cfg.model, messages=[{"role": "user", "content": "ping"}])
+            report(True, "API", f"key accepted; model {cfg.model} available")
+        except Exception as e:
+            report(False, "API", f"{type(e).__name__}: {str(e)[:160]}")
+
+    removed = removed_names()
+    print(f"info  {len(removed)} secret-looking environment variables are hidden from the "
+          "agent's commands" + (f": {', '.join(removed)}" if removed else ""))
+    for path in dotenv_files(Path(args.dir)):
+        print(f"warn  {path} is readable by the agent if you run it in this folder")
+    return 0 if ok else 1
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -123,7 +179,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-steps", type=int)
     p.add_argument("--max-cost", type=float, help="stop the run at this many dollars")
     p.add_argument("--confirm", action="store_true", help="approve each command first")
+    p.add_argument("--pass-env", action="append", metavar="NAME",
+                   help="let the agent's commands see this secret-looking variable (repeatable)")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("doctor", help="check the shell and the API credential; spends nothing")
+    p.add_argument("--dir", default=".", help="folder you intend to run in")
+    p.add_argument("--offline", action="store_true", help="skip the API check")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("bench", help="run the benchmark matrix")
     p.add_argument("--tasks", default="kv,ledger")
