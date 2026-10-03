@@ -152,6 +152,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_undo)
 
     args = parser.parse_args(argv)
+    for stream in (sys.stdout, sys.stderr):  # the model's answers are not always cp1252
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     load_dotenv()
     return args.func(args)
 

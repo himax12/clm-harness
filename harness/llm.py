@@ -31,14 +31,21 @@ def build_content(ctx: Context) -> list[dict]:
 
     One text block per context block, so that an edit only invalidates the prompt
     cache from the edited block onward.
+
+    Separators go at the START of each block and no block ends in whitespace. The API
+    trims trailing whitespace from the final block, so a block ending in a newline
+    hashes differently as the last block than as a middle block on the next turn, and
+    the previous turn's cache entry is never found. (Measured: with trailing newlines,
+    every turn re-wrote everything after the task.)
     """
-    content = [{"type": "text", "text": f"TASK\n{ctx.pinned}\n\n", "cache_control": EPHEMERAL}]
+    content = [{"type": "text", "text": f"TASK\n{ctx.pinned.strip()}", "cache_control": EPHEMERAL}]
     if ctx.rollback_note:
-        content.append({"type": "text", "text": ctx.rollback_note + "\n\n"})
-    content.append({"type": "text", "text": FIRST_LINE + "\n"})
+        content.append({"type": "text", "text": "\n\n" + ctx.rollback_note.strip()})
+    content.append({"type": "text", "text": "\n\n" + FIRST_LINE})
     start = len(content)
     for b in ctx.blocks:
-        content.append({"type": "text", "text": render_block(b) + "\n\n"})
+        sep = "\n" if len(content) == start else "\n\n"
+        content.append({"type": "text", "text": sep + render_block(b).rstrip()})
     for i in anchor_indices(len(ctx.blocks)):
         content[start + i]["cache_control"] = EPHEMERAL
     return content

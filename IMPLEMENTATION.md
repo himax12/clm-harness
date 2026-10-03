@@ -221,7 +221,7 @@ class Nudger:
 ```
 
 1. Re-arm: remove from `fired` any tier the context is now below.
-2. Urgent: `need = min(max(0.10 * limit, 2 * max(recent_outputs[-3:], default=0)), 0.50 * limit)`. If `limit - tokens < need`, return the urgent text. Fires every turn while true.
+2. Urgent: `need = min(max(0.10 * limit, 2 * max(recent_outputs[-3:], default=0)), 0.30 * limit)`. If `limit - tokens < need`, return the urgent text. Fires every turn while true.
 3. Otherwise the highest tier in `cfg.nudge_tiers` that is crossed and not yet fired; mark it and all lower tiers fired.
 4. At most one notice per turn.
 
@@ -622,3 +622,13 @@ Made while building Phases 2 and 3:
 - Benchmark runs use `max_steps=400` and a one-hour wall clock, since a stream has 47 to 91 operations.
 - `harness report <csv>` prints the per-task, per-mode summary; `bench/report.py` was folded into `bench/run.py`.
 - The summarise call in baseline mode goes through `ClaudeModel.summarise`, injected into the compactor, so `baseline.py` does not import the SDK.
+
+Found by the first live runs (3 October 2026):
+
+- **No request block may end in whitespace.** The API trims trailing whitespace from the final block, so a block ending in a newline never matched its own cache entry once it became a middle block. Measured on a three-call test: with trailing newlines the second and third calls read only the task from cache; with separators moved to the start of each block they read everything from the previous call. `build_content` now puts separators at the start of blocks.
+- **With that fixed, the 20-block lookback works**, so after an edit the request reads the cache up to the last turn boundary before the edited block. The fixed anchors are kept but only matter beyond 20 blocks.
+- **The token estimate has a fixed overhead and a ratio.** The first response sets the overhead (tool definitions the local estimate cannot see, about 800 tokens); later responses set the density ratio. With both, the estimate was within about 2% of the API's count through a 23-turn run. A single multiplier started at 2.1 and would have overstated large contexts.
+- **The agent's commands do not inherit `ANTHROPIC_*` variables**, so the model cannot read the key the harness runs on.
+- **Heredoc bodies written to a file are not scanned by the blocked-command check.** The model's notes about `safety.py` mentioned `mkfs` and were refused. Bodies fed to a shell (`bash <<EOF`) are still scanned.
+- **The urgent notice demands at most 30% of the limit as free room** (was 50%). At 50% it fired at 56% full.
+- **On Windows the system prompt warns about path translation.** The model wrote notes to `/tmp` from bash and then could not open them from native Python.

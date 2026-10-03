@@ -19,6 +19,8 @@ from harness.safety import blocked
         "shutdown -h now",
         "echo hi; reboot",
         "format C:",
+        "bash <<EOF\nrm -rf /\nEOF",
+        "cat > x.txt <<EOF\nnotes\nEOF\nrm -rf ~",
     ],
 )
 def test_destructive_commands_are_blocked(command):
@@ -36,6 +38,9 @@ def test_destructive_commands_are_blocked(command):
         "echo 'rm -rf /' > notes.txt && cat notes.txt",
         "dd if=a.img of=b.img",
         "git clean -fdx",
+        "cat > notes.md <<'EOF'\n- safety.py catches mkfs, dd of=/dev/sda, shutdown and rm -rf /\nEOF",
+        "python - <<PY\nprint('format C: is blocked; so is reboot')\nPY",
+        "grep mk <<< 'here-string mentioning other things'",
     ],
 )
 def test_ordinary_commands_are_allowed(command):

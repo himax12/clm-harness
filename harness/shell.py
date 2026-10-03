@@ -51,6 +51,11 @@ def _q(s: str) -> str:
     return "'" + s.replace("'", "'\\''") + "'"
 
 
+def _command_env() -> dict[str, str]:
+    # The agent's commands must not be able to read the API credential the harness runs on.
+    return {k: v for k, v in os.environ.items() if not k.upper().startswith("ANTHROPIC_")}
+
+
 def _write(path: Path, text: str) -> None:
     # Bash chokes on CRLF, which is what Windows text mode would write.
     path.write_text(text, encoding="utf-8", newline="\n")
@@ -119,6 +124,7 @@ class Shell:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
+            env=_command_env(),
             **kwargs,
         )
         timed_out = False

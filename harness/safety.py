@@ -11,10 +11,39 @@ _PATTERNS = [
     (re.compile(r"\bformat\s+[A-Za-z]:", re.IGNORECASE), "formats a drive"),
 ]
 _POWER = {"shutdown", "reboot", "halt", "poweroff"}
+_HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\1")
+_SHELLS = {"bash", "sh", "zsh", "dash", "eval", "source", "."}
+
+
+def _strip_heredoc_data(command: str) -> str:
+    """Drop heredoc bodies unless they are fed to a shell.
+
+    A heredoc written to a file is data, not a command: notes that merely mention
+    `mkfs` must not be blocked. (Observed live: the model's notes about this very
+    module were refused.)
+    """
+    lines = command.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        out.append(line)
+        i += 1
+        m = _HEREDOC.search(line)
+        if not m:
+            continue
+        feeds_shell = any(t in _SHELLS for t in line[: m.start()].split())
+        while i < len(lines) and lines[i].strip() != m.group(2):
+            if feeds_shell:
+                out.append(lines[i])
+            i += 1
+        i += 1  # the closing delimiter
+    return "\n".join(out)
 
 
 def blocked(command: str) -> str | None:
     """The reason a command must never run, or None. A floor, not a sandbox."""
+    command = _strip_heredoc_data(command)
     flat = " ".join(command.split())
     for pattern, reason in _PATTERNS:
         if pattern.search(flat):

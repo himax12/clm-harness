@@ -82,9 +82,9 @@ def test_content_is_one_text_block_per_context_block():
     ctx = make_ctx(("assistant", "$ ls"), ("output", "a.txt"))
     content = build_content(ctx)
     assert [c["type"] for c in content] == ["text"] * 4
-    assert content[0]["text"].startswith("TASK\nthe task")
-    assert content[1]["text"] == "[[CTX v1]]\n"
-    assert content[2]["text"].startswith("[[BLOCK id=b0001 role=assistant")
+    assert content[0]["text"] == "TASK\nthe task"
+    assert content[1]["text"] == "\n\n[[CTX v1]]"
+    assert content[2]["text"].startswith("\n[[BLOCK id=b0001 role=assistant")
     assert "a.txt" in content[3]["text"]
 
 
@@ -94,6 +94,15 @@ def test_the_model_sees_the_same_text_as_the_file():
     ctx = make_ctx(("assistant", "$ ls"), ("output", "a.txt"), ("note", "tracker"))
     joined = "".join(c["text"] for c in build_content(ctx)[1:])
     assert joined.strip() == render(ctx).strip()
+
+
+def test_no_block_ends_in_whitespace():
+    # The API trims trailing whitespace on the final block; a block that ended in a
+    # newline would never match its own cache entry on the next turn.
+    ctx = make_ctx(("assistant", "$ ls"), ("output", "a.txt\n\n"), ("note", "tracker"))
+    ctx.rollback_note = "rolled back\n"
+    for c in build_content(ctx):
+        assert c["text"] == c["text"].rstrip()
 
 
 def test_cache_markers_sit_on_the_task_and_the_anchors():
@@ -108,7 +117,7 @@ def test_rollback_note_goes_after_the_cached_task_block():
     ctx = make_ctx(("output", "x"))
     ctx.rollback_note = "rolled back"
     content = build_content(ctx)
-    assert "cache_control" in content[0] and content[1]["text"].startswith("rolled back")
+    assert "cache_control" in content[0] and content[1]["text"] == "\n\nrolled back"
     assert "cache_control" not in content[1]
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -69,6 +70,16 @@ def run_command(command: str) -> ModelReply:
 
 def load_system(cfg: Config, scripting: str = "`python3` and `re.sub`") -> str:
     text = (PROMPTS / "system.md").read_text(encoding="utf-8")
+    if os.name == "nt":
+        # Observed live: the model wrote notes to /tmp from bash, then could not open
+        # them from Python, because native Windows programs do not see Git Bash's paths.
+        text += (
+            "- This is Git Bash on Windows. `python` and other native Windows programs do not "
+            "understand Git Bash paths such as `/tmp/x` or `/c/Users/...` written inside a "
+            "script. Use relative paths, or pass a path as a command-line argument or an "
+            "environment variable, which are converted for you. Keep scratch files in the "
+            "working directory, not in `/tmp`.\n"
+        )
     if cfg.mode == "clm":
         guide = (PROMPTS / "context.md").read_text(encoding="utf-8")
         text += "\n" + guide.replace("{limit}", f"{cfg.limit:,}").replace("{scripting}", scripting)

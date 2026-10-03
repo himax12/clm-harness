@@ -92,3 +92,10 @@ def test_cap_to_room_cuts_and_saves(session_dir, est):
 def test_cap_to_room_leaves_fitting_text_alone(session_dir, est):
     assert cap_to_room("short", 500, est, "turn-0003", session_dir / "outputs") == "short"
     assert not (session_dir / "outputs" / "turn-0003.txt").exists()
+
+
+def test_api_credentials_are_not_visible_to_commands(shell, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "tok-secret")
+    out = shell.run('echo "[$ANTHROPIC_API_KEY][$ANTHROPIC_AUTH_TOKEN]"; env | grep -ci anthropic').output
+    assert out.splitlines() == ["[][]", "0"]
