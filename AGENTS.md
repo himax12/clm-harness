@@ -2,7 +2,7 @@
 
 A bash-only coding-agent harness in which Claude manages its own context by editing a file (the Context Language Model idea, arXiv 2609.37725), plus a baseline compaction mode and a benchmark that compares the two.
 
-`PLAN.md` says what is being built and why. `IMPLEMENTATION.md` says how each module works and records every deviation and every finding from live runs. Read the relevant section before changing a module.
+`PLAN.md` says what is being built and why. `IMPLEMENTATION.md` says how each module works and records every deviation and every finding from live runs. Read the relevant section before changing a module. `SAFETY.md` states what the harness protects against and what it does not; keep it true when you change `safety.py`, `redact.py` or `shell.py`. `AUDIT.md` is the open-source readiness checklist; update an item's status when you fix it.
 
 ## Commands
 

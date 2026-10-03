@@ -94,6 +94,40 @@ def test_cap_to_room_leaves_fitting_text_alone(session_dir, est):
     assert not (session_dir / "outputs" / "turn-0003.txt").exists()
 
 
+def test_background_job_does_not_hold_up_the_turn(shell):
+    result = shell.run("sleep 6 & echo started")
+    assert result.output.strip() == "started" and result.exit_code == 0
+    assert result.seconds < 4  # with a pipe this waited for the sleep to finish
+
+
+def test_background_job_keeps_running_for_the_next_command(shell):
+    shell.run("(sleep 1; echo done > marker.txt) &")
+    assert "done" in shell.run("sleep 3; cat marker.txt").output
+
+
+def test_runaway_output_is_killed(workdir, session_dir):
+    shell = Shell(workdir, session_dir, Config(command_timeout=30, max_output_bytes=200_000))
+    result = shell.run("yes abcdefghij")
+    assert result.output_limit and result.exit_code == -1 and not result.timed_out
+    assert result.seconds < 15
+    text = format_observation(result, "turn-0001", session_dir / "outputs", shell.cfg)
+    assert "killed: output passed" in text
+
+
+def test_large_finished_output_is_read_as_head_and_tail_only(workdir, session_dir):
+    shell = Shell(workdir, session_dir, Config(max_output_bytes=100_000))
+    result = shell.run("echo START; head -c 3000000 /dev/zero | tr '\\0' 'a'; echo; echo END")
+    assert len(result.output) < 110_000  # never the full 3 MB in memory
+    assert result.output.startswith("START") and result.output.rstrip().endswith("END")
+    assert "bytes omitted by the harness" in result.output
+
+
+def test_output_files_are_cleaned_up(shell):
+    shell.run("echo one")
+    shell.run("echo two")
+    assert not list(shell.state.glob("out-*.bin"))
+
+
 def test_api_credentials_are_not_visible_to_commands(shell, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "tok-secret")

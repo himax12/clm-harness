@@ -41,7 +41,18 @@ def _strip_heredoc_data(command: str) -> str:
     return "\n".join(out)
 
 
-def blocked(command: str) -> str | None:
+_GIT_OPTIONS_WITH_VALUE = {"-C", "-c", "--git-dir", "--work-tree", "--namespace"}
+
+
+def _git_subcommand(tokens: list[str]) -> str | None:
+    """`git -C dir push origin` -> "push". The word "push" as an argument does not count."""
+    i = 1
+    while i < len(tokens) and tokens[i].startswith("-"):
+        i += 2 if tokens[i] in _GIT_OPTIONS_WITH_VALUE else 1
+    return tokens[i] if i < len(tokens) else None
+
+
+def blocked(command: str, allow_push: bool = False) -> str | None:
     """The reason a command must never run, or None. A floor, not a sandbox."""
     command = _strip_heredoc_data(command)
     flat = " ".join(command.split())
@@ -56,6 +67,9 @@ def blocked(command: str) -> str | None:
             continue
         if tokens[0] in _POWER:
             return "shuts down or restarts the machine"
+        if tokens[0] == "git" and _git_subcommand(tokens) == "push" and not allow_push:
+            # Publishing is the one git action that cannot be undone locally.
+            return "pushes to a git remote; the user must start the harness with --allow-push"
         if tokens[0] == "rm":
             flags = [t for t in tokens[1:] if t.startswith("-")]
             targets = [t.strip("\"'") for t in tokens[1:] if not t.startswith("-")]

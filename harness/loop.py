@@ -226,7 +226,7 @@ def run(
         if reply.restart:
             shell.reset()
             observation = "(shell state reset)"
-        elif reason := safety.blocked(command):
+        elif reason := safety.blocked(command, cfg.allow_push):
             observation = f"[command blocked: {reason}]"
             session.bump("blocked")
         elif cfg.confirm and not safety.confirm(command):
@@ -239,7 +239,8 @@ def run(
             observation = format_observation(result, name, outputs_dir, cfg)
             session.event(
                 "command", turn, command=command, exit_code=result.exit_code,
-                timed_out=result.timed_out, seconds=round(result.seconds, 2),
+                timed_out=result.timed_out, output_limit=result.output_limit,
+                seconds=round(result.seconds, 2),
                 chars=len(result.output),
             )
 

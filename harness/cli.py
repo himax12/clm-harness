@@ -63,7 +63,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     from .config import Config
     from .loop import run
 
-    overrides = {"mode": args.mode, "confirm": args.confirm,
+    overrides = {"mode": args.mode, "confirm": args.confirm, "allow_push": args.allow_push,
                  "env_passthrough": tuple(args.pass_env or ())}
     if args.budget:
         overrides["budget_tokens"] = args.budget
@@ -171,7 +171,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("run", help="run a task with Claude")
+    p = sub.add_parser(
+        "run", help="run a task with Claude",
+        epilog="The agent runs shell commands unattended with your permissions. A short list "
+               "of destructive commands is refused, but this is not a sandbox. Read SAFETY.md "
+               "before pointing it at anything you care about.",
+    )
     p.add_argument("task")
     p.add_argument("--dir", default=".", help="directory to work in")
     p.add_argument("--mode", choices=("clm", "baseline"), default="clm")
@@ -179,6 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-steps", type=int)
     p.add_argument("--max-cost", type=float, help="stop the run at this many dollars")
     p.add_argument("--confirm", action="store_true", help="approve each command first")
+    p.add_argument("--allow-push", action="store_true", help="let the agent run `git push`")
     p.add_argument("--pass-env", action="append", metavar="NAME",
                    help="let the agent's commands see this secret-looking variable (repeatable)")
     p.set_defaults(func=cmd_run)

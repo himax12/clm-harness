@@ -15,9 +15,10 @@ from .redact import command_env
 @dataclass
 class CommandResult:
     output: str  # stdout and stderr merged
-    exit_code: int  # -1 on timeout
+    exit_code: int  # -1 when the harness killed it
     timed_out: bool
     seconds: float
+    output_limit: bool = False  # killed for printing too much
 
 
 def find_bash() -> str:
@@ -68,6 +69,7 @@ class Shell:
         self.state.mkdir(parents=True, exist_ok=True)
         self.run_sh = self.state / "run.sh"
         self.user_sh = self.state / "user_cmd.sh"
+        self._runs = 0
         state = _q(to_posix(self.state))
         _write(
             self.run_sh,
@@ -115,30 +117,53 @@ class Shell:
             kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
             kwargs["start_new_session"] = True
-        proc = subprocess.Popen(
-            [self.bash, self.run_sh.as_posix()],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            env=command_env(self.cfg.env_passthrough),
-            **kwargs,
-        )
-        timed_out = False
+        # Output goes to a file, not a pipe. With a pipe, a background job (`server &`)
+        # keeps the pipe open and the turn hangs until the job exits; and a command that
+        # prints gigabytes is buffered whole in memory. A file lets us wait on bash alone
+        # and watch the size while it runs.
+        self._runs += 1
+        sink_path = self.state / f"out-{self._runs}.bin"
+        deadline = started + self.cfg.command_timeout
+        timed_out = too_big = False
+        with open(sink_path, "wb") as sink:
+            proc = subprocess.Popen(
+                [self.bash, self.run_sh.as_posix()],
+                stdout=sink,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                env=command_env(self.cfg.env_passthrough),
+                **kwargs,
+            )
+            while True:
+                try:
+                    proc.wait(timeout=0.2)
+                    break
+                except subprocess.TimeoutExpired:
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                    elif sink_path.stat().st_size > self.cfg.max_output_bytes:
+                        too_big = True
+                    else:
+                        continue
+                    self._kill_tree(proc)
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    break
+        raw = _read_capped(sink_path, self.cfg.max_output_bytes)
         try:
-            out, _ = proc.communicate(timeout=self.cfg.command_timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            self._kill_tree(proc)
-            try:
-                out, _ = proc.communicate(timeout=10)
-            except subprocess.TimeoutExpired:
-                out = b""
-        text = (out or b"").decode("utf-8", errors="replace").replace("\r\n", "\n")
+            sink_path.unlink()
+        except OSError:
+            pass  # a background job may still hold it open
+        text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n")
+        killed = timed_out or too_big
         return CommandResult(
             output=text,
-            exit_code=-1 if timed_out else proc.returncode,
+            exit_code=-1 if killed else proc.returncode,
             timed_out=timed_out,
             seconds=time.monotonic() - started,
+            output_limit=too_big,
         )
 
     @staticmethod
@@ -155,6 +180,18 @@ class Shell:
                 os.killpg(proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+
+def _read_capped(path: Path, cap: int) -> bytes:
+    """Read a command's output, keeping at most `cap` bytes: the start and the end."""
+    size = path.stat().st_size
+    with open(path, "rb") as f:
+        if size <= cap:
+            return f.read()
+        head = f.read(cap // 2)
+        f.seek(size - cap // 2)
+        tail = f.read()
+    return head + f"\n... [{size - cap:,} bytes omitted by the harness] ...\n".encode() + tail
 
 
 def _elide(text: str, head: int, tail: int, pointer: str) -> str:
@@ -178,6 +215,9 @@ def format_observation(result: CommandResult, name: str, outputs_dir: Path, cfg:
         text = _elide(text, cfg.head_chars, cfg.tail_chars, f'"$CTX_DIR"/outputs/{name}.txt')
     if result.timed_out:
         text += f"\n(timed out after {cfg.command_timeout} s; partial output shown)"
+    if result.output_limit:
+        text += (f"\n(killed: output passed {cfg.max_output_bytes // 1_000_000} MB; "
+                 "partial output shown. Print less, or redirect to a file.)")
     return f"{text}\n(exit_code={result.exit_code})"
 
 

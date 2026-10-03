@@ -26,7 +26,9 @@ class Config:
     max_rollbacks: int = 6
     max_free_edits_in_row: int = 3
     max_refused_edits_in_row: int = 3
+    max_output_bytes: int = 10_000_000  # a command printing more than this is killed
     confirm: bool = False
+    allow_push: bool = False  # `git push` is refused unless this is set
     # Secret-looking environment variables the agent's commands may see after all.
     env_passthrough: tuple[str, ...] = ()
 

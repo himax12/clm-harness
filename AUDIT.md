@@ -18,15 +18,18 @@ Statuses come from checks run on the repo on the audit date (file presence, a sc
 
 | Date | Items | Change |
 |---|---|---|
-| 3 Oct 2026 | A5, A9 fixed; A6, A8 mitigated | Secret-looking environment variables are removed from the agent's commands; known secret values and common key formats are redacted from command output; `harness doctor` added; `run` warns about a `.env` in the working folder. The summary counts below reflect this. |
+| 3 Oct 2026 | A5, A9 fixed; A6, A8 mitigated | Secret-looking environment variables are removed from the agent's commands; known secret values and common key formats are redacted from command output; `harness doctor` added; `run` warns about a `.env` in the working folder. |
+| 3 Oct 2026 | B2, B8, B9, B12 fixed; C1 fixed; N7 partly | Command output goes to a file, so background jobs no longer stall a turn and a command printing over 10 MB is killed; `git push` is refused without `--allow-push`; `SAFETY.md` added. |
+
+The summary counts below include these changes.
 
 ## Summary
 
 | Category | Done | Partial | Missing | Total |
 |---|---|---|---|---|
 | A. Secrets and authentication | 7 | 3 | 1 | 11 |
-| B. Command execution safety | 5 | 2 | 6 | 13 |
-| C. Data handling and privacy | 1 | 1 | 4 | 6 |
+| B. Command execution safety | 9 | 0 | 4 | 13 |
+| C. Data handling and privacy | 2 | 1 | 3 | 6 |
 | D. Prompt injection and trust | 3 | 1 | 2 | 6 |
 | E. Loop correctness and robustness | 5 | 2 | 5 | 12 |
 | F. Context management | 5 | 6 | 1 | 12 |
@@ -37,12 +40,12 @@ Statuses come from checks run on the repo on the audit date (file presence, a sc
 | K. Cross-platform | 4 | 1 | 3 | 8 |
 | L. Testing and quality | 1 | 1 | 6 | 8 |
 | M. Benchmark and evidence | 4 | 1 | 6 | 11 |
-| N. Documentation | 1 | 2 | 5 | 8 |
+| N. Documentation | 1 | 3 | 4 | 8 |
 | O. Licensing and legal | 1 | 3 | 3 | 7 |
 | P. Repository and release | 3 | 1 | 4 | 8 |
 | Q. Observability | 4 | 0 | 3 | 7 |
 | R. Community | 0 | 0 | 4 | 4 |
-| **Total** | **56** | **33** | **64** | **153** |
+| **Total** | **61** | **32** | **60** | **153** |
 
 ## Launch blockers, in order
 
@@ -82,24 +85,24 @@ Statuses come from checks run on the repo on the audit date (file presence, a sc
 | # | Check | Status | Note |
 |---|---|---|---|
 | B1 | Destructive-command blocklist | Done | `rm -rf /`, `mkfs`, `dd`, fork bomb, shutdown; tested |
-| B2 | Blocklist limits stated to users | Partial | The code says "a floor, not a sandbox"; no user-facing doc. Bypassable via `python`, `find -delete` |
+| B2 | Blocklist limits stated to users | Done | `SAFETY.md` lists what is and is not protected; `harness run --help` points to it |
 | B3 | Approve-each-command mode | Done | `--confirm`; the default is unattended |
-| B4 | OS sandbox or container | Missing | None |
-| B5 | Writes confined to the working folder | Missing | The agent can write anywhere |
-| B6 | Network egress control | Missing | Unrestricted |
+| B4 | OS sandbox or container | Missing | None; `SAFETY.md` tells users to supply their own |
+| B5 | Writes confined to the working folder | Missing | The agent can write anywhere; needs B4 |
+| B6 | Network egress control | Missing | Unrestricted; needs B4 |
 | B7 | Timeout with process-tree kill | Done | Tested on Windows |
-| B8 | Background jobs do not stall a turn | Partial | `sleep 8 &` held the turn 8.2 s (measured); bounded by the timeout |
-| B9 | Cap on captured output size | Missing | 30 MB of output was buffered whole in memory (measured) |
+| B8 | Background jobs do not stall a turn | Done | Output goes to a file and the harness waits on bash alone; `sleep 6 &` now returns at once; tested. Background jobs are not cleaned up when the run ends |
+| B9 | Cap on captured output size | Done | A command printing more than 10 MB is killed; at most the cap is read into memory, as head and tail; tested |
 | B10 | Interactive commands cannot hang | Done | stdin is closed |
-| B11 | CPU, disk and process limits | Missing | None |
-| B12 | Guard on `git push` and force-push | Missing | Not in the blocklist |
+| B11 | CPU, disk and process limits | Missing | None; needs B4 |
+| B12 | Guard on `git push` and force-push | Done | `git push` in any form is refused unless the run is started with `--allow-push`; tested |
 | B13 | Heredoc data not scanned; shell-fed heredocs scanned | Done | Tested |
 
 ## C. Data handling and privacy
 
 | # | Check | Status | Note |
 |---|---|---|---|
-| C1 | Users told that file contents and output go to Anthropic | Missing | Not documented anywhere |
+| C1 | Users told that file contents and output go to Anthropic | Done | `SAFETY.md`, "Where your data goes" |
 | C2 | `.ctx/` auto-ignored in the target repo | Missing | Only ignored in this repo; the harness should write `.ctx/.gitignore` |
 | C3 | Secret redaction in stored transcripts | Missing | None |
 | C4 | No telemetry | Done | None exists |
@@ -255,7 +258,7 @@ Statuses come from checks run on the repo on the audit date (file presence, a sc
 | N4 | Architecture diagram | Missing | |
 | N5 | Docstrings on public functions | Partial | Present on most; uneven |
 | N6 | Example session walkthrough | Missing | |
-| N7 | Threat model | Missing | |
+| N7 | Threat model | Partial | `SAFETY.md` lists protections and gaps; no attacker-by-attacker analysis |
 | N8 | Changelog | Missing | |
 
 ## O. Licensing and legal
