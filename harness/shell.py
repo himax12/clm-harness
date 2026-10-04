@@ -10,6 +10,7 @@ from pathlib import Path
 from .budget import Estimator
 from .config import Config
 from .redact import command_env
+from .sandbox import Sandbox
 
 
 @dataclass
@@ -64,25 +65,31 @@ class Shell:
     def __init__(self, workdir: Path, session_dir: Path, cfg: Config):
         self.workdir = Path(workdir).resolve()
         self.cfg = cfg
-        self.bash = find_bash()
         self.state = Path(session_dir) / "state"
         self.state.mkdir(parents=True, exist_ok=True)
         self.run_sh = self.state / "run.sh"
         self.user_sh = self.state / "user_cmd.sh"
         self._runs = 0
         self._jobs: list[int] = []  # Windows job handles, one per command
-        state = _q(to_posix(self.state))
+        # With a sandbox, commands run in a container: the host needs no bash, and
+        # every path the scripts mention is the path inside the container.
+        self.sandbox = Sandbox(self.workdir, session_dir, cfg) if cfg.sandbox == "docker" else None
+        self.bash = None if self.sandbox else find_bash()
+        self._inside = self.sandbox.path if self.sandbox else to_posix
+        state = _q(self._inside(self.state))
         _write(
             self.run_sh,
             "\n".join(
                 [
                     f"STATE={state}",
+                    # The sandbox ends a timed-out command through this pid.
+                    *(['echo $$ > "$STATE/pid"'] if self.sandbox else []),
                     '__save_state() { pwd > "$STATE/cwd"; export -p > "$STATE/env.sh"; }',
                     "trap __save_state EXIT",
                     '[ -f "$STATE/env.sh" ] && . "$STATE/env.sh" 2>/dev/null',
-                    f'cd "$(cat "$STATE/cwd")" 2>/dev/null || cd {_q(to_posix(self.workdir))}',
-                    f"export CTX={_q(to_posix(Path(session_dir) / 'LIVE_CTX.md'))}",
-                    f"export CTX_DIR={_q(to_posix(Path(session_dir)))}",
+                    f'cd "$(cat "$STATE/cwd")" 2>/dev/null || cd {_q(self._inside(self.workdir))}',
+                    f"export CTX={_q(self._inside(Path(session_dir) / 'LIVE_CTX.md'))}",
+                    f"export CTX_DIR={_q(self._inside(Path(session_dir)))}",
                     "export CI=true TERM=dumb PAGER=cat GIT_PAGER=cat",
                     '. "$STATE/user_cmd.sh"',
                     "",
@@ -93,7 +100,7 @@ class Shell:
 
     def reset(self) -> None:
         """Forget the saved working directory and environment."""
-        _write(self.state / "cwd", to_posix(self.workdir) + "\n")
+        _write(self.state / "cwd", self._inside(self.workdir) + "\n")
         (self.state / "env.sh").unlink(missing_ok=True)
 
     def scripting_hint(self) -> str:
@@ -127,17 +134,21 @@ class Shell:
         # and watch the size while it runs.
         self._runs += 1
         sink_path = self.state / f"out-{self._runs}.bin"
-        deadline = started + self.cfg.command_timeout
         timed_out = too_big = False
         with open(sink_path, "wb") as sink:
-            proc = subprocess.Popen(
-                [self.bash, self.run_sh.as_posix()],
-                stdout=sink,
-                stderr=subprocess.STDOUT,
-                stdin=subprocess.DEVNULL,
-                env=command_env(self.cfg.env_passthrough),
-                **kwargs,
-            )
+            if self.sandbox:
+                if not self.sandbox.started:
+                    self.sandbox.start()
+                # The command writes to the sink from inside the container; what the
+                # docker client itself prints (an engine error) is kept apart.
+                argv = self.sandbox.exec_argv(self.run_sh, sink_path)
+                streams = {"stdout": subprocess.DEVNULL, "stderr": subprocess.PIPE}
+            else:
+                argv = [self.bash, self.run_sh.as_posix()]
+                streams = {"stdout": sink, "stderr": subprocess.STDOUT,
+                           "env": command_env(self.cfg.env_passthrough)}
+            deadline = time.monotonic() + self.cfg.command_timeout
+            proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, **streams, **kwargs)
             if job:
                 job = _adopt(job, proc)
             if job:
@@ -153,6 +164,8 @@ class Shell:
                         too_big = True
                     else:
                         continue
+                    if self.sandbox:
+                        self.sandbox.kill_command(self.state / "pid")
                     self._kill_tree(proc, job)
                     try:
                         proc.wait(timeout=10)
@@ -160,6 +173,12 @@ class Shell:
                         pass
                     break
         raw = _read_capped(sink_path, self.cfg.max_output_bytes)
+        if self.sandbox and not (timed_out or too_big):
+            engine = proc.stderr.read().strip()
+            if engine:
+                raw += b"\n[sandbox] " + engine
+        if proc.stderr:
+            proc.stderr.close()
         for _ in range(20):  # a killed process can take a moment to release the file
             try:
                 sink_path.unlink()
@@ -197,9 +216,12 @@ class Shell:
     def close(self) -> None:
         """End every process any command started, including background jobs.
 
-        Windows only: there each command runs in its own job object. On POSIX a
-        background job that outlives its command is left running.
+        With a sandbox the container is removed. Without one this works on Windows
+        only, where each command runs in its own job object; on POSIX a background
+        job that outlives its command is left running.
         """
+        if self.sandbox:
+            self.sandbox.close()
         for job in self._jobs:
             _kernel32.TerminateJobObject(job, 1)
             _kernel32.CloseHandle(job)

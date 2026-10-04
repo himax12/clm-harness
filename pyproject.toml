@@ -3,6 +3,8 @@ name = "clm-harness"
 version = "0.1.0"
 description = "A bash-only coding-agent harness in which the model manages its own context by editing a file"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = ["anthropic>=1.8,<2"]
 

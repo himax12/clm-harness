@@ -107,7 +107,8 @@ def test_background_job_keeps_running_for_the_next_command(shell):
 
 # The commands in the next tests are bounded on purpose. An earlier version used `yes`,
 # the kill did not reach it on Windows, and three orphans wrote 77 GB to the temp folder.
-HEARTBEAT = "while true; do date +%s%N > beat.txt; sleep 0.2; done"
+# Ends by itself after about a minute, so a failed kill or a failed test leaves nothing behind.
+HEARTBEAT = "for i in $(seq 1 200); do date +%s%N > beat.txt; sleep 0.2; done"
 BOUNDED_FLOOD = "for i in $(seq 1 400); do head -c 100000 /dev/zero | tr '\\0' 'a'; done"  # 40 MB
 
 
@@ -143,7 +144,9 @@ def test_close_ends_background_jobs(workdir, session_dir):
 
     shell = Shell(workdir, session_dir, Config(command_timeout=20))
     shell.run(f"({HEARTBEAT}) &")
-    assert "alive" in shell.run("sleep 1; test -s beat.txt && echo alive").output
+    # The loop empties the file just before each write, so look more than once.
+    alive = "sleep 1; for i in $(seq 1 20); do test -s beat.txt && echo alive && break; sleep 0.1; done"
+    assert "alive" in shell.run(alive).output
     if os.name != "nt":
         shell.run("pkill -f beat.txt || true")  # POSIX has no per-command job to close
         return
@@ -151,12 +154,17 @@ def test_close_ends_background_jobs(workdir, session_dir):
     assert _beats_stopped(workdir)
 
 
-def test_large_finished_output_is_read_as_head_and_tail_only(workdir, session_dir):
-    shell = Shell(workdir, session_dir, Config(max_output_bytes=100_000))
-    result = shell.run("echo START; head -c 3000000 /dev/zero | tr '\\0' 'a'; echo; echo END")
-    assert len(result.output) < 110_000  # never the full 3 MB in memory
-    assert result.output.startswith("START") and result.output.rstrip().endswith("END")
-    assert "bytes omitted by the harness" in result.output
+def test_large_finished_output_is_read_as_head_and_tail_only(tmp_path):
+    # On the file directly: through a real command it depended on the command
+    # finishing between two size checks, and failed on a busy machine.
+    from harness.shell import _read_capped
+
+    path = tmp_path / "out.bin"
+    path.write_bytes(b"START\n" + b"a" * 3_000_000 + b"\nEND\n")
+    output = _read_capped(path, 100_000).decode()
+    assert len(output) < 110_000  # never the full 3 MB in memory
+    assert output.startswith("START") and output.rstrip().endswith("END")
+    assert "bytes omitted by the harness" in output
 
 
 def test_output_files_are_cleaned_up(shell):

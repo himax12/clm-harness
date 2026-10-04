@@ -6,7 +6,7 @@ Most agent harnesses decide what the model remembers: when the context fills up,
 
 This is an implementation of the idea in [Context Language Models](https://arxiv.org/abs/2609.37725) (Shao et al., 2026), written from the paper's design for Anthropic's hosted API.
 
-> **Status: experimental.** It works and is tested, but it is not ready for unattended use on anything you care about. The agent runs shell commands with your permissions and there is no sandbox. Read [SAFETY.md](SAFETY.md) first.
+> **Status: experimental.** It works and is tested, but it is not ready for unattended use on anything you care about. By default the agent runs shell commands with your permissions; `--sandbox docker` runs them in a container instead. Read [SAFETY.md](SAFETY.md) first.
 
 ## What it does
 
@@ -14,6 +14,7 @@ This is an implementation of the idea in [Context Language Models](https://arxiv
 - Mirrors the model's context to a file it can edit; each edit is applied whole or refused whole, with a receipt.
 - Shows the model its context size on every result and warns it as the limit approaches.
 - Keeps an append-only transcript, the original of every block, and a snapshot at each edit.
+- Can run the agent's commands in a Docker container that sees only the project folder and has no network (`--sandbox docker`).
 - Includes an ordinary compaction mode (`--mode baseline`) and a benchmark for comparing the two.
 
 ## Requirements
@@ -21,6 +22,7 @@ This is an implementation of the idea in [Context Language Models](https://arxiv
 - Python 3.12 or newer and [uv](https://docs.astral.sh/uv/)
 - Bash. On Windows, install [Git for Windows](https://git-scm.com/download/win).
 - An Anthropic API key with credit. Each run is billed.
+- Optional: Docker, for the sandbox.
 
 Development and all live runs so far have been on Windows 11 with Git Bash. The test suite also runs on Linux in CI. macOS is untested, and no live run has been made outside Windows.
 
@@ -75,6 +77,17 @@ Useful flags for `run`:
 | `--confirm` | off | Approve every command before it runs |
 | `--allow-push` | off | Let the agent run `git push` |
 | `--pass-env NAME` | none | Let the agent's commands see a secret-looking variable |
+| `--sandbox none\|docker` | `none` | `docker`: run commands in a container that sees only `--dir` |
+| `--allow-net` | off | Give the sandbox network access |
+| `--sandbox-image NAME` | built on first use | Container image for the sandbox |
+
+To run a task in the sandbox:
+
+```
+uv run harness run "fix the failing test" --dir path/to/repo --sandbox docker
+```
+
+The project appears at `/work` inside the container. A task that needs to download packages also needs `--allow-net`.
 
 ## How it works
 
@@ -133,4 +146,4 @@ uv run ruff check .     lint
 
 ## Licence
 
-No licence has been chosen yet. Until one is added, the code is published for reading only and all rights are reserved.
+[MIT](LICENSE).

@@ -75,7 +75,14 @@ def run_command(command: str) -> ModelReply:
 
 def load_system(cfg: Config, scripting: str = "`python3` and `re.sub`") -> str:
     text = (PROMPTS / "system.md").read_text(encoding="utf-8")
-    if os.name == "nt":
+    if cfg.sandbox == "docker":
+        net = "The network is available." if cfg.sandbox_network else "There is no network access."
+        text += (
+            "- Commands run in a Linux container. The project is mounted at `/work`; nothing "
+            f"else of the user's machine is visible. {net} A `.env` file in the project "
+            "appears empty.\n"
+        )
+    elif os.name == "nt":
         # Observed live: the model wrote notes to /tmp from bash, then could not open
         # them from Python, because native Windows programs do not see Git Bash's paths.
         text += (

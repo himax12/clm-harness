@@ -2,7 +2,7 @@
 
 Audited on 3 October 2026 at commit `1707c7d`. Last updated on 4 October 2026 at commit `add5e43` (branch `phase-2-3`).
 
-**Verdict: not ready for an open-source launch, but the list of blockers is now short.** What remains is a licence, a sandbox, a valid benchmark comparison, and a release.
+**Verdict: not ready for an open-source launch, but the list of blockers is now short.** What remains is a valid benchmark comparison and a release. A Docker sandbox now exists but is opt-in.
 
 ## How to read this
 
@@ -18,8 +18,8 @@ Statuses come from checks run on the repo (file presence, a scan of git history,
 
 | Category | Done | Partial | Missing | Total |
 |---|---|---|---|---|
-| A. Secrets and authentication | 7 | 3 | 1 | 11 |
-| B. Command execution safety | 9 | 0 | 4 | 13 |
+| A. Secrets and authentication | 8 | 3 | 0 | 11 |
+| B. Command execution safety | 12 | 1 | 0 | 13 |
 | C. Data handling and privacy | 3 | 2 | 1 | 6 |
 | D. Prompt injection and trust | 3 | 1 | 2 | 6 |
 | E. Loop correctness and robustness | 8 | 0 | 4 | 12 |
@@ -32,11 +32,11 @@ Statuses come from checks run on the repo (file presence, a scan of git history,
 | L. Testing and quality | 4 | 1 | 3 | 8 |
 | M. Benchmark and evidence | 4 | 1 | 6 | 11 |
 | N. Documentation | 3 | 3 | 2 | 8 |
-| O. Licensing and legal | 2 | 3 | 2 | 7 |
+| O. Licensing and legal | 3 | 3 | 1 | 7 |
 | P. Repository and release | 3 | 1 | 4 | 8 |
 | Q. Observability | 6 | 0 | 1 | 7 |
 | R. Community | 3 | 0 | 1 | 4 |
-| **Total** | **86** | **30** | **37** | **153** |
+| **Total** | **91** | **31** | **31** | **153** |
 
 At the first audit the totals were 54 done, 32 partial and 67 missing.
 
@@ -44,8 +44,8 @@ At the first audit the totals were 54 done, 32 partial and 67 missing.
 
 | # | Blocker | Items | Needs |
 |---|---|---|---|
-| 1 | No LICENSE file; without one the code is all-rights-reserved | O1 | A decision on which licence |
-| 2 | The agent runs commands with the user's full permissions and can read secret files on disk | A6, A7, B4, B5, B6, B11 | A sandbox, most simply a Docker mode |
+| 1 | Resolved 4 Oct 2026: MIT licence added | O1 | Nothing |
+| 2 | Mostly resolved 4 Oct 2026: `--sandbox docker` confines the agent to the working folder with no network. It is off by default (I4) and has only been run on Windows | A6, A7, B4, B5, B6, B11 | A decision on whether the sandbox should be the default; a run on Linux |
 | 3 | No valid benchmark comparison; the one baseline run ended in an API refusal | M4, M5, M6 | A fairer baseline, then paid runs |
 | 4 | The work is on an unmerged branch; no tag or release | P1, P2 | A decision to merge and tag |
 | 5 | No live run outside Windows; macOS untested | K2 | A Linux or macOS machine with an API key |
@@ -61,6 +61,8 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | 3 Oct 2026 | B2, B8, B9, B12, C1 fixed; N7 partly | Command output goes to a file, so background jobs no longer stall a turn and a command printing over 10 MB is killed; `git push` is refused without `--allow-push`; `SAFETY.md` added. |
 | 4 Oct 2026 | **B7 was wrong and is now fixed** | The first audit marked the timeout kill as done. It was not: on Windows the kill did not reach processes started by Git Bash, and a test's runaway command filled the disk. Commands now run in a job object and every descendant is ended; tests check that the children are dead. |
 | 4 Oct 2026 | C2, E2, E6, E7, G10, H6, I2, I3, I7, I8, I10, J4, K6, K7, L2, L5, L8, N2, N8, O3, Q5, Q6, R1, R3, R4 fixed; G4, K2, L6 partly | Session folder ignores itself in git; clean shutdown; extra tool calls reported; refusal category recorded; SDK version bounded; progress with running cost; new flags and `sessions`; config validation; `.gitattributes`; CI on Linux and Windows for Python 3.12 and 3.13; ruff; README, CHANGELOG, CONTRIBUTING, SECURITY, templates; cost at the serving model's prices. |
+| 4 Oct 2026 | O1 fixed | MIT licence added: `LICENSE`, `pyproject.toml`, README. |
+| 4 Oct 2026 | A7, B4, B5, B6 fixed; A6, B11 partly | `--sandbox docker`: commands run in a container that sees only the working and session folders, with no network, no host environment, dropped capabilities and resource limits. Opt-in. |
 
 ---
 
@@ -73,8 +75,8 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | A3 | No key in git history | Done | Scanned all branches: 0 matches |
 | A4 | Key hidden from the agent's commands | Done | Tested |
 | A5 | Other secrets hidden from the agent's commands | Done | Secret-looking variables are removed; `--pass-env NAME` opts one back in; tested |
-| A6 | Agent cannot read a `.env` in its working folder | Partial | Still readable. Its values are redacted from command output, and `run` and `doctor` warn. Needs a sandbox to close |
-| A7 | Agent cannot read `~/.ssh`, `~/.aws`, git credentials | Missing | Needs a sandbox (B4) |
+| A6 | Agent cannot read a `.env` in its working folder | Partial | In the sandbox a top-level `.env` reads as empty; one in a subfolder is still readable. Without the sandbox its values are only redacted from output, and `run` and `doctor` warn |
+| A7 | Agent cannot read `~/.ssh`, `~/.aws`, git credentials | Done | With `--sandbox docker` only the working and session folders are mounted; tested. Without it they are readable |
 | A8 | Secrets never written to transcripts | Partial | Removed variables' values, `.env` values and common key formats are redacted. A secret in any other file or format is not |
 | A9 | Credential check before a run | Done | `harness doctor`; uses free token counting; verified live |
 | A10 | `.env` does not override the real environment | Done | Tested |
@@ -87,14 +89,14 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | B1 | Destructive-command blocklist | Done | Tested |
 | B2 | Blocklist limits stated to users | Done | `SAFETY.md`; `harness run --help` points to it |
 | B3 | Approve-each-command mode | Done | `--confirm`; the default is unattended |
-| B4 | OS sandbox or container | Missing | None; `SAFETY.md` tells users to supply their own |
-| B5 | Writes confined to the working folder | Missing | Needs B4 |
-| B6 | Network egress control | Missing | Needs B4 |
+| B4 | OS sandbox or container | Done | `--sandbox docker`, opt-in; `harness/sandbox.py`; tested against a real engine on Windows. Linux and macOS untried |
+| B5 | Writes confined to the working folder | Done | In the sandbox; tested |
+| B6 | Network egress control | Done | In the sandbox the network is off unless `--allow-net`; tested. No per-host allowlist |
 | B7 | Timeout kills the command and everything it started | Done | Windows: job object, tested by checking the children stop. Linux: process group, passes in CI. See the change log: this was wrongly marked done before |
 | B8 | Background jobs do not stall a turn | Done | Tested. On Windows they are ended when the run ends; on Linux and macOS they are not |
 | B9 | Cap on captured output size | Done | Killed past 10 MB; at most the cap is read into memory; tested |
 | B10 | Interactive commands cannot hang | Done | stdin is closed |
-| B11 | CPU, disk and process limits | Missing | Needs B4 |
+| B11 | CPU, disk and process limits | Partial | In the sandbox: memory, CPU, process count and `/tmp` are capped. Writes to the working folder are not |
 | B12 | Guard on `git push` and force-push | Done | Refused without `--allow-push`; tested |
 | B13 | Heredoc data not scanned; shell-fed heredocs scanned | Done | Tested |
 
@@ -188,7 +190,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | I1 | `run`, `log`, `undo`, `bench`, `report` | Done | |
 | I2 | Progress output during a run | Done | One line per turn and per edit; `--quiet` turns it off; tested |
 | I3 | `--model`, `--effort`, `--timeout` flags | Done | Tested |
-| I4 | Safe default mode | Partial | Runs unattended by default |
+| I4 | Safe default mode | Partial | Runs unattended and unsandboxed by default; the sandbox is opt-in |
 | I5 | Meaningful exit codes | Done | 0 finished, 1 otherwise, 2 bad input or no client |
 | I6 | Session inspection | Done | `harness log` |
 | I7 | List sessions | Done | `harness sessions`; tested |
@@ -223,7 +225,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 
 | # | Check | Status | Note |
 |---|---|---|---|
-| L1 | Test suite passes | Done | 267 tests, about 50 s |
+| L1 | Test suite passes | Done | 287 tests, about 75 s with Docker running (the sandbox tests are skipped without it) |
 | L2 | Tests skip cleanly without bash | Done | Tests that run commands are skipped |
 | L3 | Coverage measured | Missing | |
 | L4 | Scripted live smoke test | Missing | Done by hand each time |
@@ -265,7 +267,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 
 | # | Check | Status | Note |
 |---|---|---|---|
-| O1 | LICENSE | Missing | README says so plainly |
+| O1 | LICENSE | Done | MIT; `LICENSE`, declared in `pyproject.toml` and the README |
 | O2 | Clean of the paper's non-commercial code | Partial | Reimplemented from the design in our own wording; not independently reviewed |
 | O3 | Attribution for the paper and `pi-clm` | Done | README acknowledgements |
 | O4 | Dependency licences checked | Partial | Two direct dependencies; not audited |
@@ -321,7 +323,8 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | Timed-out command's children on Windows (4 Oct) | Before: survived; three orphaned `yes` processes wrote 77 GB of temp files. Now: a heartbeat loop stops within a second of the kill |
 | `harness doctor` (3 Oct) | All checks passed against the live API at no cost |
 | CI run 37177829380 (4 Oct) | Success on Ubuntu and Windows, Python 3.12 and 3.13 |
-| Test suite (4 Oct) | 267 passed; lint clean |
+| Test suite (4 Oct) | 287 passed, including 10 sandbox tests against Docker 29.7.2 on Windows; lint clean |
+| Sandbox checks (4 Oct) | In the container: `uname` is Linux, a file beside the working folder is not visible, `.env` reads as 0 bytes, a connection to 1.1.1.1 fails, a host variable is absent, a timed-out heartbeat loop stops, and no container is left after the run |
 
 ## Pilot benchmark, for items M3 to M5
 
