@@ -20,6 +20,8 @@ Notable changes to this project. Versions follow [semantic versioning](https://s
 - Configuration is validated when it is built.
 - CI on Linux and Windows; ruff lint.
 - MIT licence.
+- Use from other agents (`integrations/`): a context engine plug-in for Hermes Agent and a plug-in for opencode, in which the host's own model manages its context through one tool, `clm_context`; and `harness mcp`, an MCP server with one tool, `run_task`, for Codex CLI and any other agent. None has been used in a live session yet.
+- `harness run --json` prints the result as one JSON object.
 - One-line installers: `install.sh` for macOS, Linux and WSL, and `install.ps1` for Windows. They install uv if needed, then the harness as a uv tool.
 - `harness setup` saves the API key in the user's settings folder, where an installed copy finds it.
 - `harness doctor` reports the system, says what to install when something is missing, and no longer fails for a missing bash when Docker can run the sandbox.

@@ -1,0 +1,14 @@
+{
+  "name": "clm-opencode-check",
+  "private": true,
+  "type": "module",
+  "description": "Type-checks clm.ts against opencode's plug-in types and drives it with a synthetic session.",
+  "scripts": {
+    "check": "tsc -p . && node check.mjs"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.18.34",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}

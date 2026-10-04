@@ -34,3 +34,4 @@ select = ["E", "F", "W", "B"]
 [tool.ruff.lint.per-file-ignores]
 # Tests hold long literal commands and expected strings; wrapping them hurts more than it helps.
 "tests/*" = ["E501", "B007"]
+"integrations/*/check.py" = ["E501"]
