@@ -109,7 +109,16 @@ class Overlay:
         self.notices: dict[str, str] = {}  # key -> size notice attached to that message
         self.fired: set[float] = set()
         self.tracker = ""
-        self.ratio = 1.0  # real tokens per estimated token, from the host's usage figures
+        # The estimate is characters / 4, corrected in two parts against the host's real
+        # counts. `overhead` is what the messages do not show (tool definitions), taken
+        # from the first response; `ratio` is how dense the tokenizer is, from later ones.
+        # One multiplier for both badly overstates every block: the first live session
+        # showed the model sizes three times too large.
+        self.ratio = 1.0
+        self.overhead = 0
+        self.calibrated = False
+        self.last_raw = 0  # the estimate for the request most recently sent
+        self.usage_id = ""  # the response the last calibration came from
         self.edits = self.refused = 0
         self.msgs: list[Msg] = []
         self.frozen: set[str] = set()
@@ -120,6 +129,8 @@ class Overlay:
         return {"limit": self.limit, "ids": self.ids, "replaced": self.replaced,
                 "removed": sorted(self.removed), "notices": self.notices,
                 "fired": sorted(self.fired), "tracker": self.tracker, "ratio": self.ratio,
+                "overhead": self.overhead, "calibrated": self.calibrated,
+                "last_raw": self.last_raw, "usage_id": self.usage_id,
                 "edits": self.edits, "refused": self.refused}
 
     @classmethod
@@ -132,6 +143,10 @@ class Overlay:
         o.fired = set(data.get("fired", []))
         o.tracker = data.get("tracker", "")
         o.ratio = float(data.get("ratio", 1.0))
+        o.overhead = int(data.get("overhead", 0))
+        o.calibrated = bool(data.get("calibrated", False))
+        o.last_raw = int(data.get("last_raw", 0))
+        o.usage_id = data.get("usage_id", "")
         o.edits, o.refused = int(data.get("edits", 0)), int(data.get("refused", 0))
         return o
 
@@ -184,15 +199,33 @@ class Overlay:
     def tracker_text(self) -> str:
         return f"[context tracker]\n{self.tracker}" if self.tracker else ""
 
-    def tokens(self) -> int:
-        raw = _raw(self.tracker_text()) + sum(_raw(t) for _, t, _ in self.view() if t is not None)
-        return math.ceil(raw * self.ratio)
+    def _raw_now(self) -> int:
+        return _raw(self.tracker_text()) + sum(
+            _raw(t) for _, t, _ in self.view() if t is not None)
 
-    def calibrate(self, real_prompt_tokens: int) -> None:
-        """Correct the estimate against the host's real count for the last request."""
-        raw = _raw(self.tracker_text()) + sum(_raw(t) for _, t, _ in self.view() if t is not None)
-        if real_prompt_tokens > 0 and raw > 0:
-            self.ratio = min(3.0, max(0.5, real_prompt_tokens / raw))
+    def tokens(self) -> int:
+        """The size of the whole request as the host counts it."""
+        return math.ceil(self._raw_now() * self.ratio) + self.overhead
+
+    def mark_request(self) -> None:
+        """Record the estimate for the request about to be sent, so the host's real
+        count for it can be compared with the right thing."""
+        self.last_raw = self._raw_now()
+
+    def calibrate(self, real_prompt_tokens: int, usage_id: str = "") -> None:
+        """Correct the estimate against the host's real count for the last request.
+        A response is used once: pass its id when the same count may be given again."""
+        if real_prompt_tokens <= 0 or self.last_raw <= 0:
+            return
+        if usage_id:
+            if usage_id == self.usage_id:
+                return
+            self.usage_id = usage_id
+        if not self.calibrated:
+            self.overhead = max(0, real_prompt_tokens - self.last_raw)
+            self.calibrated = True
+            return
+        self.ratio = min(3.0, max(0.5, (real_prompt_tokens - self.overhead) / self.last_raw))
 
     def notice(self) -> str | None:
         """Attach a size notice to the newest message when a tier is first crossed."""
@@ -367,7 +400,9 @@ def run_json(request: dict) -> dict:
     """One request from a plug-in that is not written in Python.
 
     In: {state, limit, messages: [{key, role, text, calls, answers}], in_flight,
-    prompt_tokens, op: {action, id, ids, text}}. Out: {view: [{key, text, changed}],
+    prompt_tokens, usage_id, op: {action, id, ids, text}}. `prompt_tokens` is the host's
+    real count for the previous request and `usage_id` names the response it came from.
+    Out: {view: [{key, text, changed}],
     tracker, tokens, limit, result, prompt, tool}. `text` is null for a removed message.
     """
     state = Path(request["state"])
@@ -382,14 +417,15 @@ def run_json(request: dict) -> dict:
         msgs.append(Msg(key, raw["role"], text, calls, answers))
     overlay.sync(msgs, bool(request.get("in_flight")))
     if request.get("prompt_tokens"):
-        overlay.calibrate(int(request["prompt_tokens"]))
+        overlay.calibrate(int(request["prompt_tokens"]), str(request.get("usage_id") or ""))
     out: dict = {}
     op = request.get("op")
     if op:
         out["result"] = overlay.apply(op.get("action", ""), op.get("id", ""), op.get("ids"),
                                       op.get("text", ""))
-    else:
+    else:  # a request is about to be sent
         overlay.notice()
+        overlay.mark_request()
     overlay.save(state)
     out.update(
         view=[{"key": m.key, "text": text, "changed": changed}

@@ -139,7 +139,18 @@ export const CLM: Plugin = async ({ directory }) => {
       if (!sessionID) return
       const current = blocks(output.messages as Item[])
       last.set(sessionID, current)
-      const reply = call({ state: state(sessionID), limit: limits.get(sessionID) ?? 0, messages: current })
+      // The real size of the previous request, from the newest reply that reports one.
+      const replied = [...(output.messages as Item[])]
+        .reverse()
+        .find((m) => m.info.role === "assistant" && m.info.tokens?.input !== undefined)
+      const tokens = replied?.info.tokens
+      const reply = call({
+        state: state(sessionID),
+        limit: limits.get(sessionID) ?? 0,
+        messages: current,
+        prompt_tokens: tokens ? tokens.input + (tokens.cache?.read ?? 0) + (tokens.cache?.write ?? 0) : 0,
+        usage_id: replied?.info.id ?? "",
+      })
       if (!reply) return
       const next = render(output.messages as Item[], reply)
       output.messages.splice(0, output.messages.length, ...(next as typeof output.messages))

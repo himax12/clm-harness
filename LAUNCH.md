@@ -134,13 +134,13 @@ There are two kinds of support. A host can hand a whole task to this harness (de
 | EC1 | `AGENTS.md` at the root | Done | Read by Codex CLI and other agents working on the repository |
 | EC2 | Machine-readable result | Done | `harness run --json` |
 | EC3 | Stable exit codes | Done | 0, 1 and 2 |
-| EC4 | An MCP server exposing one "run a task" tool | Done | `harness mcp`: one tool, `run_task`, sandboxed by default, with a cost ceiling. Tested through a real process; not yet used from a live host |
+| EC4 | An MCP server exposing one "run a task" tool | Done | `harness mcp`: one tool, `run_task`, sandboxed by default, with a cost ceiling. Called once from a live Codex CLI session |
 | EC5 | An agent skill describing when to call it | Done | `integrations/skill/SKILL.md` |
 | EC6 | A documented Python entry point | Partial | `clm_harness.loop.run` works but is not documented as public |
 | EC7 | Approval through a callback, not the keyboard | Missing | `--confirm` calls `input()`, which cannot work when another program is the caller |
 | EC8 | Hermes models as the model | Missing | Covered by MP4 |
-| EC9 | Native plug-in for Hermes Agent | Partial | `integrations/hermes/clm`. Loads through Hermes's real loader and passes a synthetic session. No live session yet |
-| EC10 | Native plug-in for opencode | Partial | `integrations/opencode/clm.ts`. Type-checks against opencode's types and passes a synthetic session. No live session yet; the hook it uses is experimental |
+| EC9 | Native plug-in for Hermes Agent | Partial | `integrations/hermes/clm`. One short live session on one model worked. No long session, and nothing on a model that keeps its thinking |
+| EC10 | Native plug-in for opencode | Partial | `integrations/opencode/clm.ts`. One short live session on one model worked, with the cache intact before the edit. The hook it uses is experimental |
 | EC11 | Native support in Codex CLI | Missing | Blocked upstream: hooks cannot edit history |
 
 ### DC. Documentation and community

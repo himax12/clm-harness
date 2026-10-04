@@ -647,4 +647,12 @@ Found while working through `AUDIT.md` (3 and 4 October 2026):
   - Killing the `docker exec` client does not end the process in the container. `run.sh` writes its pid, and a timeout kills that process group from inside. Docker starts each exec'd process as the leader of its own group and session (checked with `ps`), so the group is exactly that command's processes and earlier background jobs survive. If the kill fails, the container is removed and the next command starts a new one.
   - The kill script runs under `bash`: dash's `kill` rejects `--` before a negative pid, and the first version silently killed only the group leader. The heartbeat test caught it.
   The system prompt gains one constant line describing the container, and drops the Git Bash note. No live model run has been made in the sandbox yet.
+- **Host plug-ins (`hostctx.py`, `integrations/`), from the first live sessions on 4 October 2026.**
+  - The size estimate needs the same two-part correction as the standalone harness. With one multiplier, the fixed cost of the host's tool definitions (11,000 to 14,000 tokens in Hermes Agent and opencode) was spread over the messages, the multiplier hit its ceiling of 3, and the model was told a block was three times its real size. `Overlay` now takes `overhead` from the first response and `ratio` from later ones.
+  - The real count must be compared with the estimate of the request it belongs to. `mark_request()` records that estimate when a request goes out, and a response is used once (`usage_id`), because opencode offers the same count again on every later call.
+  - Hermes Agent removes its message id from the request it hands the engine, so messages are identified by tool call ids, or by a hash of role and content when there is none.
+  - In opencode a tool call and its result are one part of an assistant message, so such a block has no separate call to keep paired and may be removed whole.
+  - opencode treats every export of a plug-in file as a plug-in, so the file has one export.
+  - Measured in opencode: after the model replaced a 6,000-token output, the next request was 5,900 tokens smaller and the 14,400 tokens before the edit were still read from cache.
+  - `codex exec` refuses an MCP tool call that needs approval unless `--approve-for-me` is given.
 - **A repeated-command check was considered and left out.** In the stream benchmark the same command legitimately runs once per operation, so a naive "three identical commands" rule would fire constantly.

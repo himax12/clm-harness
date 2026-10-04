@@ -121,11 +121,13 @@ See `integrations/README.md`.
 - [x] Hermes Agent context engine plug-in, checked through Hermes's real loader. [EC9]
 - [x] opencode plug-in, type-checked against opencode's types. [EC10]
 - [x] A weekly CI job that checks both plug-ins against their hosts' current releases.
-- [ ] One live session in Hermes Agent with the plug-in. *Needs Hermes installed and a few cents.* [EC9]
-- [ ] One live session in opencode with the plug-in. *Needs opencode installed and a few cents.* [EC10]
-- [ ] On those sessions, check prompt caching after an edit and count refused edits. [MP6, MP8]
+- [x] One live session in Hermes Agent with the plug-in. Done on `claude-haiku-4-5`: 3 cents. [EC9]
+- [x] One live session in opencode with the plug-in. Done on `claude-haiku-4-5`: 2 cents. [EC10]
+- [x] On those sessions, check prompt caching after an edit. In opencode the part before the edit was still read from cache; Hermes reports totals only. [MP6]
+- [ ] A long live session in each host, long enough for the size notices and the fallback to fire, counting refused edits. [MP8]
+- [ ] A live session in each host on a second model.
 - [ ] Check edits to earlier assistant messages on models that keep their thinking: it may be rejected.
-- [ ] One live task handed over from Codex CLI through the MCP server. *A few cents.* [EC4]
+- [x] One live task handed over from Codex CLI through the MCP server. Done: 1 cent. [EC4]
 - [ ] Publish the opencode plug-in to npm.
 - [ ] Move the opencode plug-in to opencode's newer plug-in API once it is the default. [EC10]
 - [ ] Native Codex support, if its hooks gain the ability to replace history. [EC11]

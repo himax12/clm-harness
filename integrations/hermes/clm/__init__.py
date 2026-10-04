@@ -143,6 +143,7 @@ class CLMEngine(ContextEngine):
                        budget_tokens: int = 0) -> List[Dict[str, Any]]:
         self.overlay.sync(to_msgs(request_messages))
         self.overlay.notice()
+        self.overlay.mark_request()  # update_from_response compares against this
         self._save()
         return self._render(request_messages, guide=True)
 

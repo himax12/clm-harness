@@ -145,10 +145,35 @@ def test_shrink_clears_old_tool_output_then_removes_old_calls():
     assert texts(o)["u1"] is not None  # never the user's message
 
 
-def test_calibration_follows_the_hosts_real_count(ov):
+def test_calibration_separates_fixed_overhead_from_density(ov):
     estimate = ov.tokens()
-    ov.calibrate(estimate * 2)
-    assert ov.tokens() == pytest.approx(estimate * 2, rel=0.01)
+    ov.mark_request()
+    ov.calibrate(estimate + 9000)  # the first response: tool definitions the messages hide
+    assert ov.overhead == 9000 and ov.ratio == 1.0
+    assert ov.tokens() == estimate + 9000
+    block = ov.apply("list")["blocks"][2]["tokens"]  # a block's own size is not inflated
+    assert block == 1000
+
+    ov.mark_request()
+    ov.calibrate(int(estimate * 1.2) + 9000)  # later responses: a denser tokenizer
+    assert ov.ratio == pytest.approx(1.2, rel=0.01) and ov.overhead == 9000
+    assert ov.apply("list")["blocks"][2]["tokens"] == pytest.approx(1200, abs=2)
+
+
+def test_one_response_calibrates_once(ov):
+    ov.mark_request()
+    ov.calibrate(5000, usage_id="msg_1")
+    ov.calibrate(5000, usage_id="msg_2")
+    ratio = ov.ratio
+    ov.sync(convo() + [Msg("u2", "user", "x" * 8000)])
+    ov.mark_request()
+    ov.calibrate(5000, usage_id="msg_2")  # the same response again, after the view changed
+    assert ov.ratio == ratio
+
+
+def test_calibration_without_a_sent_request_does_nothing(ov):
+    ov.calibrate(50_000)
+    assert ov.ratio == 1.0 and ov.overhead == 0
 
 
 def test_keys_for_messages_without_ids():

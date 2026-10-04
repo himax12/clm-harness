@@ -7,7 +7,13 @@ There are two ways another agent can use this project.
 | **Native plug-in** | Model-managed context inside the host: the host's own model lists, shortens, removes and restores blocks of its own context | Hermes Agent, opencode |
 | **Delegate** | The host hands a whole task to clm-harness, which runs it with its own context | Codex CLI, and any agent that accepts MCP servers |
 
-> **Status.** Each plug-in has been loaded through its host's real plug-in loader or types and driven with a synthetic session. **None has been used in a live session with a model yet.** Expect rough edges, and please report what you find.
+> **Status: tried once each, on one model.** On 4 October 2026 each route was run in a short live session on Windows 11 (see the table below). That shows the plumbing works. It does not show that a model manages a long session well this way: no long session, no other model and no other system has been tried. Please report what you find.
+
+| Route | Host version | Model | What happened |
+|---|---|---|---|
+| Hermes Agent plug-in | current `main` | `claude-haiku-4-5` | The model listed its context and replaced an 8,800-token tool output with one line. 5 model calls, 3 cents |
+| opencode plug-in | 1.17.11 | `claude-haiku-4-5` | The same. The next request was 5,900 tokens smaller and the part before the edit was still read from cache. 5 model calls, 2 cents |
+| MCP server from Codex CLI | 0.160.0 | Codex's own, then `claude-opus-5-5` | Codex called `run_task`; the task ran in the Docker sandbox and finished. 1 cent |
 
 ## How the native plug-ins work
 
@@ -64,6 +70,8 @@ The plug-in uses `experimental.chat.messages.transform`, which opencode marks ex
 ```
 codex mcp add clm-harness -- clm-harness mcp
 ```
+
+Codex asks for approval before it calls the tool. In `codex exec`, which cannot ask, the call is refused unless you pass `--approve-for-me`.
 
 or in `~/.codex/config.toml`:
 

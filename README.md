@@ -149,7 +149,7 @@ What commands see from inside the sandbox:
 
 ## Use it from other agents
 
-Hermes Agent and opencode can use model-managed context for their own sessions through a plug-in, and Codex CLI or any other agent can hand tasks to this harness through an MCP server. [integrations/README.md](integrations/README.md) has the setup for each. These are new and have not been used in a live session yet.
+Hermes Agent and opencode can use model-managed context for their own sessions through a plug-in, and Codex CLI or any other agent can hand tasks to this harness through an MCP server. [integrations/README.md](integrations/README.md) has the setup for each. These are new: each has been tried once in a short live session.
 
 ## How it works
 
