@@ -8,6 +8,10 @@ This is an implementation of the idea in [Context Language Models](https://arxiv
 
 > **Status: experimental.** It works and is tested, but it is not ready for unattended use on anything you care about. By default the agent runs shell commands with your permissions; `--sandbox docker` runs them in a container instead. Read [SAFETY.md](SAFETY.md) first.
 
+![Replay of a recorded run: the terminal log on the left, context size on the right](docs/media/replay.gif)
+
+*A replay of one recorded run. The model reads every file in a small codebase under a 9,952-token limit and edits its own context 13 times to stay under it. [Video](docs/media/replay.mp4), [how these were made](docs/media/README.md).*
+
 ## What it does
 
 - Runs one bash command per turn in a loop, with limits on steps, cost and time.
@@ -89,6 +93,10 @@ uv run harness run "fix the failing test" --dir path/to/repo --sandbox docker
 
 The project appears at `/work` inside the container. A task that needs to download packages also needs `--allow-net`.
 
+What commands see from inside the sandbox:
+
+![Commands run inside the sandbox: Linux, only the project folder, an empty .env, no network](docs/media/sandbox.png)
+
 ## How it works
 
 Each turn the harness sends the model a fresh request: a fixed system prompt, the task, and the context file, one block per turn record.
@@ -118,7 +126,10 @@ More detail: [PLAN.md](PLAN.md) for the design and reasoning, [IMPLEMENTATION.md
 
 Very little so far, and nothing that supports a general claim.
 
-- On a 23-turn task under a 12,000-token budget, the model applied 13 context edits, none were refused, and the context stayed under the limit.
+- On a 23-turn task under a 12,000-token budget, the model applied 13 context edits, none were refused, and the context stayed under the limit. The chart below is that run; [its full log](docs/media/session-log.png) is the output of `harness log`.
+
+  ![Context size per turn stays under the limit](docs/media/context-size.png)
+
 - On one run of a synthetic key-value task (about 99,000 tokens of input through a 29,952-token limit), the model-managed mode answered 24 of 24 questions correctly for $1.08.
 - The one baseline run of the same task ended early in an API refusal and is not a valid comparison.
 
