@@ -8,6 +8,10 @@ from clm_harness.loop import ModelReply, ScriptedModel, run, run_command
 from clm_harness.redact import (REDACTED, Redactor, command_env, dotenv_files, is_secret_name,
                             removed_names, secret_values)
 
+# Made-up values, built from pieces so that secret scanners do not flag this file.
+FAKE_TOKEN = "tok-" + "0123456789abcdef"
+FAKE_STRIPE = "sk_" + "live_" + "0123456789abcdefghij"
+
 
 @pytest.mark.parametrize("name", [
     "ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "GITHUB_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY",
@@ -50,12 +54,12 @@ def test_dotenv_files_skip_templates(workdir):
 
 
 def test_secret_values_come_from_removed_variables_and_dotenv_files(workdir, monkeypatch):
-    monkeypatch.setenv("DEPLOY_TOKEN", "tok-0123456789abcdef")
+    monkeypatch.setenv("DEPLOY_TOKEN", FAKE_TOKEN)
     monkeypatch.setenv("SHORT_TOKEN", "abc")  # too short to redact safely
     (workdir / ".env").write_text('DB_URL="postgres://u:hunter2hunter2@db/x"\nDEBUG=1\n')
     (workdir / ".env.example").write_text("DB_URL=placeholder-value-here\n")
     values = secret_values(workdir)
-    assert "tok-0123456789abcdef" in values and "postgres://u:hunter2hunter2@db/x" in values
+    assert FAKE_TOKEN in values and "postgres://u:hunter2hunter2@db/x" in values
     assert "abc" not in values and "1" not in values and "placeholder-value-here" not in values
 
 
@@ -89,8 +93,8 @@ def events(result):
 
 
 def test_secrets_never_reach_the_context_the_transcript_or_saved_output(workdir, monkeypatch):
-    monkeypatch.setenv("DEPLOY_TOKEN", "tok-0123456789abcdef")
-    (workdir / ".env").write_text("STRIPE=sk_live_0123456789abcdefghij\n")
+    monkeypatch.setenv("DEPLOY_TOKEN", FAKE_TOKEN)
+    (workdir / ".env").write_text(f"STRIPE={FAKE_STRIPE}\n")
     cfg = Config(inline_chars=200, head_chars=50, tail_chars=50)  # force a saved output file
     model = ScriptedModel([
         run_command('echo "[$DEPLOY_TOKEN]"'),          # the variable is not even set
@@ -106,8 +110,8 @@ def test_secrets_never_reach_the_context_the_transcript_or_saved_output(workdir,
         everything += path.read_text(encoding="utf-8")
     for path in (result.session_dir / "blocks").iterdir():
         everything += path.read_text(encoding="utf-8")
-    assert "sk_live_0123456789abcdefghij" not in everything
-    assert "tok-0123456789abcdef" not in everything
+    assert FAKE_STRIPE not in everything
+    assert FAKE_TOKEN not in everything
 
     start = events(result)[0]
     assert start["env_removed"] >= 1 and start["secrets_redacted"] >= 2
