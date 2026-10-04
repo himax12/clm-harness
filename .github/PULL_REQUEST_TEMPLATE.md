@@ -13,6 +13,6 @@
 
 A change to the request, the prompts or the loop can. Say whether you ran it live and what you saw.
 
-**Audit item**
+**Issue**
 
-If this closes an item in `AUDIT.md`, name it and update its status in the same pull request.
+If this closes an issue, link it.

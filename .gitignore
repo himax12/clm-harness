@@ -7,3 +7,6 @@ __pycache__/
 dist/
 .env
 bench_out/
+
+# Maintainers' working notes: kept on the machine, not published.
+/internal/

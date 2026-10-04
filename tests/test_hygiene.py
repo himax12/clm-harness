@@ -1,4 +1,4 @@
-"""Behaviour added while working through AUDIT.md: clean shutdown, progress output,
+"""Run hygiene: clean shutdown, progress output,
 per-model prices, configuration checks and the CLI conveniences."""
 import io
 import json

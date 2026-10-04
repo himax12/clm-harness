@@ -174,7 +174,7 @@ Either way the model gets a receipt on its next turn. The original text of every
 
 The task and the user's messages cannot be edited. If the context still overflows, the harness drops the newest turns and tells the model which commands caused it.
 
-More detail: [PLAN.md](PLAN.md) for the design and reasoning, [IMPLEMENTATION.md](IMPLEMENTATION.md) for each module and the findings from live runs.
+More detail: [AGENTS.md](AGENTS.md) describes each module and the rules the design depends on.
 
 ## What has been measured
 
@@ -187,7 +187,7 @@ Very little so far, and nothing that supports a general claim.
 - On one run of a synthetic key-value task (about 99,000 tokens of input through a 29,952-token limit), the model-managed mode answered 24 of 24 questions correctly for $1.08.
 - The one baseline run of the same task ended early in an API refusal and is not a valid comparison.
 
-A proper comparison across tasks and seeds has not been run. [AUDIT.md](AUDIT.md) tracks this and everything else that is unfinished.
+A proper comparison across tasks and seeds has not been run. It is the next piece of work.
 
 ## Cost
 
@@ -197,7 +197,7 @@ A run costs what its API calls cost. Editing the context is not free: everything
 
 **What does a run cost?** Two recorded runs of the same task (reading a small codebase and summarising it) cost $0.60 and $0.82 on `claude-opus-5-5`. A trivial task cost about a cent. `--max-cost` stops the run once the limit is reached; it is checked before each model call, so a run can pass it by one call.
 
-**Can I use another model?** `--model` accepts other Claude models, but only `claude-opus-5-5` has been run. Other providers are not supported yet; [LAUNCH.md](LAUNCH.md) describes the plan.
+**Can I use another model?** `--model` accepts other Claude models, but only `claude-opus-5-5` has been run. Other providers are not supported yet. Models served through an Anthropic-compatible endpoint are planned first, then an OpenAI-compatible adapter.
 
 **`--sandbox docker` says the sandbox cannot start.** Docker is not running, or it is set to Windows containers. Start Docker Desktop, or switch it to Linux containers, and check with `harness doctor`.
 

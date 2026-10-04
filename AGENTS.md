@@ -2,7 +2,9 @@
 
 A bash-only coding-agent harness in which Claude manages its own context by editing a file (the Context Language Model idea, arXiv 2609.37725), plus a baseline compaction mode and a benchmark that compares the two.
 
-`PLAN.md` says what is being built and why. `IMPLEMENTATION.md` says how each module works and records every deviation and every finding from live runs. Read the relevant section before changing a module. `SAFETY.md` states what the harness protects against and what it does not; keep it true when you change `safety.py`, `redact.py`, `shell.py` or `sandbox.py`. `AUDIT.md` is the open-source readiness checklist; update an item's status when you fix it. `LAUNCH.md` is the wider launch checklist (going public, packaging, visibility, other models and agents) and the architecture review; keep its statuses current the same way.
+`SAFETY.md` states what the harness protects against and what it does not; keep it true when you change `safety.py`, `redact.py`, `shell.py` or `sandbox.py`. `CHANGELOG.md` records what changed for users.
+
+The maintainers keep their working notes (the design plan, the implementation spec with findings from live runs, audits and the task list) in an `internal/` folder that is not published. If you have that folder, read the relevant section of `internal/IMPLEMENTATION.md` before changing a module and keep the statuses in `internal/AUDIT.md`, `internal/LAUNCH.md` and `internal/TODO.md` current.
 
 ## Commands
 
@@ -78,7 +80,7 @@ Session data is written to `<workdir>/.ctx/sessions/<id>/` and benchmark output 
 - Write every file the shell will read with `newline="\n"`. Bash fails on CRLF.
 - The project path contains spaces. Quote paths in scripts, and refer to the context file as `"$CTX"`.
 - On Windows, `python3` may be a Store stub and native programs do not understand Git Bash paths such as `/tmp/x`. See `Shell.scripting_hint` and the Windows note in `load_system`.
-- Add or change a test with every behaviour change. Live findings go in `IMPLEMENTATION.md` under the deviations section, with what was measured.
+- Add or change a test with every behaviour change. Report live findings in the pull request with what was measured; maintainers also record them in `internal/IMPLEMENTATION.md`.
 - Work on a branch, not on `main`. Commit only when asked.
 
 ## Checking a change

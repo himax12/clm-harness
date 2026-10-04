@@ -14,7 +14,7 @@ The task or situation, not the solution.
 
 **Is it already planned?**
 
-Check `TODO.md` and `LAUNCH.md`. If it is there, name the item.
+Search the open issues first. If one covers it, add to that issue.
 
 **Would it change model behaviour or cost?**
 
