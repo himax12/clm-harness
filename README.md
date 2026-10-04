@@ -228,3 +228,7 @@ uv run ruff check .     lint
 ## Licence
 
 [MIT](LICENSE).
+
+---
+
+<p align="center">Made with ❤️ by <a href="https://github.com/himax12">Himanshu</a></p>
