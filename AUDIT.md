@@ -33,10 +33,10 @@ Statuses come from checks run on the repo (file presence, a scan of git history,
 | M. Benchmark and evidence | 4 | 1 | 6 | 11 |
 | N. Documentation | 3 | 3 | 2 | 8 |
 | O. Licensing and legal | 3 | 3 | 1 | 7 |
-| P. Repository and release | 3 | 1 | 4 | 8 |
+| P. Repository and release | 5 | 0 | 3 | 8 |
 | Q. Observability | 6 | 0 | 1 | 7 |
 | R. Community | 3 | 0 | 1 | 4 |
-| **Total** | **91** | **31** | **31** | **153** |
+| **Total** | **93** | **30** | **30** | **153** |
 
 At the first audit the totals were 54 done, 32 partial and 67 missing.
 
@@ -89,7 +89,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | B1 | Destructive-command blocklist | Done | Tested |
 | B2 | Blocklist limits stated to users | Done | `SAFETY.md`; `harness run --help` points to it |
 | B3 | Approve-each-command mode | Done | `--confirm`; the default is unattended |
-| B4 | OS sandbox or container | Done | `--sandbox docker`, opt-in; `harness/sandbox.py`; tested against a real engine on Windows. Linux and macOS untried |
+| B4 | OS sandbox or container | Done | `--sandbox docker`, opt-in; `harness/sandbox.py`; tested against a real engine on Windows and, in CI, on Linux. macOS untried |
 | B5 | Writes confined to the working folder | Done | In the sandbox; tested |
 | B6 | Network egress control | Done | In the sandbox the network is off unless `--allow-net`; tested. No per-host allowlist |
 | B7 | Timeout kills the command and everything it started | Done | Windows: job object, tested by checking the children stop. Linux: process group, passes in CI. See the change log: this was wrongly marked done before |
@@ -279,13 +279,13 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 
 | # | Check | Status | Note |
 |---|---|---|---|
-| P1 | Clean default branch | Partial | `main` has 1 commit; the rest sit on an unmerged branch |
+| P1 | Clean default branch | Done | Work reaches `main` through pull requests |
 | P2 | Version tags and releases | Missing | 0 tags |
 | P3 | Package builds with prompts included | Done | Wheel built; 3 prompt files present |
 | P4 | Publish workflow | Missing | |
 | P5 | Lock file committed | Done | `uv.lock` |
 | P6 | Ignore rules | Done | `.ctx/`, `.env`, `bench_out/` |
-| P7 | Branch protection | Missing | |
+| P7 | Branch protection | Done | `main` needs a pull request and the four CI jobs to pass; no force pushes or deletion; applies to admins too |
 | P8 | Dependency update and audit | Missing | |
 
 ## Q. Observability

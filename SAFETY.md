@@ -26,7 +26,7 @@ What the sandbox does not do:
 - **It does not filter the network.** It is off or on; there is no list of allowed hosts.
 - **It is only as strong as Docker.** A container shares the host's kernel. It stops mistakes and ordinary attacks, not a kernel exploit.
 - **It does not stop prompt injection.** It limits what an injected instruction can reach.
-- **It has been run on Windows with Docker Desktop only.** Linux and macOS use the same code but are untried.
+- **It has had little use.** Its tests pass on Windows with Docker Desktop and on Linux in CI. macOS is untried, and no live model run has used it yet.
 
 Some tools the project needs may be missing from the default image. `--sandbox-image NAME` uses another image; it must contain `bash`.
 
