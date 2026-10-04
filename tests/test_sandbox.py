@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from harness import sandbox
-from harness.cli import main
-from harness.config import Config
-from harness.loop import ModelReply, ScriptedModel, load_system, run, run_command
-from harness.sandbox import Sandbox, docker_status, exec_argv, run_argv
-from harness.shell import Shell
+from clm_harness import sandbox
+from clm_harness.cli import main
+from clm_harness.config import Config
+from clm_harness.loop import ModelReply, ScriptedModel, load_system, run, run_command
+from clm_harness.sandbox import Sandbox, docker_status, exec_argv, run_argv
+from clm_harness.shell import Shell
 
 
 def _argv(cfg: Config, masked=()) -> list[str]:
@@ -86,8 +86,8 @@ def test_system_prompt_describes_the_sandbox_and_stays_constant():
 
 
 def test_run_stops_before_spending_when_docker_is_unusable(monkeypatch, tmp_path, capsys):
-    monkeypatch.setattr("harness.cli._claude", lambda cfg: object())
-    monkeypatch.setattr("harness.sandbox.docker_status", lambda: (False, "engine is off"))
+    monkeypatch.setattr("clm_harness.cli._claude", lambda cfg: object())
+    monkeypatch.setattr("clm_harness.sandbox.docker_status", lambda: (False, "engine is off"))
     assert main(["run", "do it", "--dir", str(tmp_path), "--sandbox", "docker"]) == 2
     assert "engine is off" in capsys.readouterr().err
 

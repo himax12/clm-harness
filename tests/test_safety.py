@@ -1,6 +1,6 @@
 import pytest
 
-from harness.safety import blocked
+from clm_harness.safety import blocked
 
 
 @pytest.mark.parametrize(

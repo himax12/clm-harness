@@ -2,7 +2,7 @@ import copy
 
 import pytest
 
-from harness.context import (
+from clm_harness.context import (
     FIRST_LINE,
     apply_edit,
     parse,

@@ -6,7 +6,11 @@ from dataclasses import dataclass
 # Input, output and the cache-read rates for Opus 5.5, Sonnet 5.5 and Fable 5.1 are
 # Anthropic's published figures. The Opus 5 and Opus 4.8 cache-read rates are the usual
 # 0.1 x input and have not been checked; they only matter on a fallback turn.
+# Haiku 4.5: input and output are published; its cache-read rate is the same assumption.
+# It is priced here but cannot be run yet: it rejects the `effort` setting and adaptive
+# thinking that the request in llm.py sends.
 MODEL_PRICES = {
+    "claude-haiku-4-5": {"input": 1.0, "output": 5.0, "cache_read": 0.10, "cache_write": 1.25},
     "claude-opus-5-5": {"input": 4.0, "output": 20.0, "cache_read": 0.20, "cache_write": 5.0},
     "claude-sonnet-5-5": {"input": 2.0, "output": 10.0, "cache_read": 0.20, "cache_write": 2.5},
     "claude-fable-5-1": {"input": 10.0, "output": 50.0, "cache_read": 0.25, "cache_write": 12.5},

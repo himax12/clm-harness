@@ -100,6 +100,13 @@ def parse_response(response) -> ModelReply:
     return reply
 
 
+def check_credential(model: str) -> None:
+    """Raise unless the key is accepted and the model exists. Token counting checks
+    both and costs nothing."""
+    anthropic.Anthropic().messages.count_tokens(
+        model=model, messages=[{"role": "user", "content": "ping"}])
+
+
 class ClaudeModel:
     def __init__(self, cfg: Config, client=None):
         self.cfg = cfg

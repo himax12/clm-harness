@@ -163,7 +163,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         print(f"{'ok  ' if good else 'FAIL'}  {label}: {detail}")
 
     cfg = Config()
-    report(sys.version_info >= (3, 12), "python", sys.version.split()[0])
+    report(sys.version_info >= (3, 10), "python", sys.version.split()[0])
     try:
         bash = find_bash()
         report(True, "bash", bash)
@@ -179,11 +179,9 @@ def cmd_doctor(args: argparse.Namespace) -> int:
            else "not set; put ANTHROPIC_API_KEY in .env (see .env.example)")
     if source and not args.offline:
         try:
-            import anthropic
+            from .llm import check_credential  # the only module that imports the SDK
 
-            # Token counting validates the key and the model id and costs nothing.
-            anthropic.Anthropic().messages.count_tokens(
-                model=cfg.model, messages=[{"role": "user", "content": "ping"}])
+            check_credential(cfg.model)
             report(True, "API", f"key accepted; model {cfg.model} available")
         except Exception as e:
             report(False, "API", f"{type(e).__name__}: {str(e)[:160]}")
@@ -202,7 +200,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
-    from bench.run import report, run_matrix
+    from clm_harness.bench.run import report, run_matrix
 
     out = Path(args.out)
     run_matrix(
@@ -216,7 +214,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    from bench.run import report
+    from clm_harness.bench.run import report
 
     print(report(Path(args.csv)))
     return 0

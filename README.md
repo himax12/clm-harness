@@ -1,5 +1,9 @@
 # clm-harness
 
+[![CI](https://github.com/himax12/clm-harness/actions/workflows/ci.yml/badge.svg)](https://github.com/himax12/clm-harness/actions/workflows/ci.yml)
+[![Licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
+
 A small coding-agent harness in which the model manages its own context window.
 
 Most agent harnesses decide what the model remembers: when the context fills up, the harness summarises or drops old turns. Here the context is mirrored to a file, and the model edits that file with ordinary shell commands. It prunes a file dump once it has taken notes, shortens stale output, and keeps a tracker of what it has done. The harness checks each edit, keeps the originals on disk, and can undo it.
@@ -21,9 +25,23 @@ This is an implementation of the idea in [Context Language Models](https://arxiv
 - Can run the agent's commands in a Docker container that sees only the project folder and has no network (`--sandbox docker`).
 - Includes an ordinary compaction mode (`--mode baseline`) and a benchmark for comparing the two.
 
+## Who it is for
+
+People who want to study or build on model-managed context: researchers checking the paper's idea on a hosted model, and harness authors who want a small, tested reference to read. It is not a replacement for a daily coding assistant.
+
+How it relates to nearby work:
+
+| Project | What decides what the model remembers | Notes |
+|---|---|---|
+| Ordinary compaction (most harnesses) | The harness: it summarises or drops old turns at a threshold | Included here as `--mode baseline`, for comparison |
+| The paper's official code | The model | Licensed CC BY-NC 4.0. This project uses none of it |
+| [pi-clm](https://github.com/lolipopshock/pi-clm) | The model | MIT. Its strategy notes informed this project's prompt |
+| [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) | Nothing; the history is kept as it is | A minimal bash-only agent. This project borrows its loop shape |
+| **clm-harness** | The model, by editing a file, with every edit validated and reversible | MIT; Anthropic's hosted API only, for now |
+
 ## Requirements
 
-- Python 3.12 or newer and [uv](https://docs.astral.sh/uv/)
+- Python 3.10 or newer and [uv](https://docs.astral.sh/uv/)
 - Bash. On Windows, install [Git for Windows](https://git-scm.com/download/win).
 - An Anthropic API key with credit. Each run is billed.
 - Optional: Docker, for the sandbox.
@@ -138,6 +156,22 @@ A proper comparison across tasks and seeds has not been run. [AUDIT.md](AUDIT.md
 ## Cost
 
 A run costs what its API calls cost. Editing the context is not free: everything after an edited block is re-sent at the cache-write price. `--max-cost` stops a run at a dollar limit, and `harness log` shows what each edit cost in re-read tokens.
+
+## Questions
+
+**What does a run cost?** Two recorded runs of the same task (reading a small codebase and summarising it) cost $0.60 and $0.82 on `claude-opus-5-5`. A trivial task cost about a cent. `--max-cost` stops the run once the limit is reached; it is checked before each model call, so a run can pass it by one call.
+
+**Can I use another model?** `--model` accepts other Claude models, but only `claude-opus-5-5` has been run. Other providers are not supported yet; [LAUNCH.md](LAUNCH.md) describes the plan.
+
+**`--sandbox docker` says the sandbox cannot start.** Docker is not running, or it is set to Windows containers. Start Docker Desktop, or switch it to Linux containers, and check with `harness doctor`.
+
+**On Windows the agent cannot find a file it just wrote.** Git Bash paths such as `/tmp/x` mean nothing to native Windows programs. The agent is told this, but the simplest fix is the sandbox, where everything is Linux.
+
+**The run ended with `refusal`.** The API declined the request, after trying its own fallback model where one applies. The category is printed and recorded in the transcript. The harness does not retry.
+
+**The run ended with `context_exhausted`.** The context overflowed and rolling back the newest turns did not help. Raise `--budget`, or give a task that prints less.
+
+**Where is the record of a run?** In `<folder>/.ctx/sessions/<id>/`. `harness sessions` lists them and `harness log <id>` shows one.
 
 ## Development
 

@@ -1,4 +1,4 @@
-from harness.env import load_dotenv
+from clm_harness.env import load_dotenv
 
 
 def test_loads_values_and_ignores_comments_and_blanks(tmp_path, monkeypatch):

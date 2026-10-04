@@ -1,9 +1,9 @@
 import json
 
-from harness.baseline import CLEARED, maybe_compact
-from harness.budget import context_tokens
-from harness.config import Config
-from harness.session import Session, Usage
+from clm_harness.baseline import CLEARED, maybe_compact
+from clm_harness.budget import context_tokens
+from clm_harness.config import Config
+from clm_harness.session import Session, Usage
 
 from conftest import make_ctx
 

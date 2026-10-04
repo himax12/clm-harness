@@ -20,7 +20,15 @@ Notable changes to this project. Versions follow [semantic versioning](https://s
 - Configuration is validated when it is built.
 - CI on Linux and Windows; ruff lint.
 - MIT licence.
+- A second command name, `clm-harness`.
+- Python 3.10 and 3.11 are supported and tested.
+- A publish workflow for PyPI, a Dependabot configuration, a citation file and a feature-request template.
+- `LAUNCH.md` (launch checklist and architecture review) and `TODO.md` (the ordered work list).
 - Sandbox: `--sandbox docker` runs the agent's commands in a container that sees only the working folder, with no network (`--allow-net` turns it on), no host environment, dropped capabilities and limits on memory, CPU and processes. `--sandbox-image` chooses the image.
+
+### Changed
+
+- The code is now one importable package, `clm_harness`, with the benchmark at `clm_harness.bench`. The old top-level names `harness` and `bench` are gone. The `harness` command is unchanged.
 
 ### Fixed
 

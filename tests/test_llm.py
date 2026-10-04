@@ -4,9 +4,9 @@ import anthropic
 import httpx2 as httpx
 import pytest
 
-from harness import llm
-from harness.config import Config
-from harness.llm import ClaudeModel, anchor_indices, build_content, parse_response
+from clm_harness import llm
+from clm_harness.config import Config
+from clm_harness.llm import ClaudeModel, anchor_indices, build_content, parse_response
 
 from conftest import make_ctx
 
@@ -89,7 +89,7 @@ def test_content_is_one_text_block_per_context_block():
 
 
 def test_the_model_sees_the_same_text_as_the_file():
-    from harness.context import render
+    from clm_harness.context import render
 
     ctx = make_ctx(("assistant", "$ ls"), ("output", "a.txt"), ("note", "tracker"))
     joined = "".join(c["text"] for c in build_content(ctx)[1:])

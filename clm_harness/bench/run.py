@@ -6,9 +6,9 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from harness.baseline import make_compactor
-from harness.config import Config
-from harness.loop import Model, run
+from clm_harness.baseline import make_compactor
+from clm_harness.config import Config
+from clm_harness.loop import Model, run
 
 from . import kv_store, ledger
 from .common import StreamDriver, check_sizing, score, sized_for

@@ -26,17 +26,17 @@ Statuses come from checks run on the repo (file presence, a scan of git history,
 | F. Context management | 5 | 6 | 1 | 12 |
 | G. Model and API integration | 5 | 3 | 2 | 10 |
 | H. Cost control | 4 | 3 | 0 | 7 |
-| I. CLI and product design | 9 | 1 | 1 | 11 |
+| I. CLI and product design | 10 | 1 | 0 | 11 |
 | J. Configuration | 2 | 1 | 1 | 4 |
 | K. Cross-platform | 6 | 1 | 1 | 8 |
 | L. Testing and quality | 4 | 1 | 3 | 8 |
 | M. Benchmark and evidence | 4 | 1 | 6 | 11 |
 | N. Documentation | 3 | 3 | 2 | 8 |
-| O. Licensing and legal | 3 | 3 | 1 | 7 |
-| P. Repository and release | 5 | 0 | 3 | 8 |
+| O. Licensing and legal | 4 | 3 | 0 | 7 |
+| P. Repository and release | 5 | 2 | 1 | 8 |
 | Q. Observability | 6 | 0 | 1 | 7 |
 | R. Community | 3 | 0 | 1 | 4 |
-| **Total** | **93** | **30** | **30** | **153** |
+| **Total** | **95** | **32** | **26** | **153** |
 
 At the first audit the totals were 54 done, 32 partial and 67 missing.
 
@@ -63,6 +63,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | 4 Oct 2026 | C2, E2, E6, E7, G10, H6, I2, I3, I7, I8, I10, J4, K6, K7, L2, L5, L8, N2, N8, O3, Q5, Q6, R1, R3, R4 fixed; G4, K2, L6 partly | Session folder ignores itself in git; clean shutdown; extra tool calls reported; refusal category recorded; SDK version bounded; progress with running cost; new flags and `sessions`; config validation; `.gitattributes`; CI on Linux and Windows for Python 3.12 and 3.13; ruff; README, CHANGELOG, CONTRIBUTING, SECURITY, templates; cost at the serving model's prices. |
 | 4 Oct 2026 | O1 fixed | MIT licence added: `LICENSE`, `pyproject.toml`, README. |
 | 4 Oct 2026 | A7, B4, B5, B6 fixed; A6, B11 partly | `--sandbox docker`: commands run in a container that sees only the working and session folders, with no network, no host environment, dropped capabilities and resource limits. Opt-in. |
+| 4 Oct 2026 | I11, K7, O7 fixed; P4, P8 partly | Release 0.1 preparation: one package `clm_harness`, a second command name, Python 3.10 and 3.11, a publish workflow, Dependabot configuration, a citation file. |
 
 ---
 
@@ -70,7 +71,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 
 | # | Check | Status | Note |
 |---|---|---|---|
-| A1 | API key read from environment or `.env` | Done | `harness/env.py`, tested |
+| A1 | API key read from environment or `.env` | Done | `clm_harness/env.py`, tested |
 | A2 | `.env` ignored by git; `.env.example` committed | Done | Verified with `git check-ignore` |
 | A3 | No key in git history | Done | Scanned all branches: 0 matches |
 | A4 | Key hidden from the agent's commands | Done | Tested |
@@ -89,7 +90,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | B1 | Destructive-command blocklist | Done | Tested |
 | B2 | Blocklist limits stated to users | Done | `SAFETY.md`; `harness run --help` points to it |
 | B3 | Approve-each-command mode | Done | `--confirm`; the default is unattended |
-| B4 | OS sandbox or container | Done | `--sandbox docker`, opt-in; `harness/sandbox.py`; tested against a real engine on Windows and, in CI, on Linux. macOS untried |
+| B4 | OS sandbox or container | Done | `--sandbox docker`, opt-in; `clm_harness/sandbox.py`; tested against a real engine on Windows and, in CI, on Linux. macOS untried |
 | B5 | Writes confined to the working folder | Done | In the sandbox; tested |
 | B6 | Network egress control | Done | In the sandbox the network is off unless `--allow-net`; tested. No per-host allowlist |
 | B7 | Timeout kills the command and everything it started | Done | Windows: job object, tested by checking the children stop. Linux: process group, passes in CI. See the change log: this was wrongly marked done before |
@@ -197,7 +198,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | I8 | Help text | Done | Every flag has help; `run` carries the safety note |
 | I9 | UTF-8 output on Windows | Done | |
 | I10 | Task from a file or stdin | Done | `--task-file PATH` or `-`; tested |
-| I11 | Name checked on PyPI; clear positioning | Missing | `clm-harness` and the generic `harness` command are unchecked |
+| I11 | Name checked on PyPI; clear positioning | Done | `clm-harness` is free on PyPI (checked 4 October); the README says who it is for and how it differs. The name is not reserved until the first release |
 
 ## J. Configuration
 
@@ -218,7 +219,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | K4 | `python3` stub detection | Done | |
 | K5 | Paths with spaces | Done | Tested |
 | K6 | `.gitattributes` for line endings | Done | LF everywhere |
-| K7 | Python versions | Done | 3.12 and 3.13 in CI |
+| K7 | Python versions | Done | 3.10 to 3.13 in CI |
 | K8 | WSL | Missing | Untested |
 
 ## L. Testing and quality
@@ -273,7 +274,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | O4 | Dependency licences checked | Partial | Two direct dependencies; not audited |
 | O5 | Trademark use ("Claude") | Partial | Descriptive use only; not reviewed |
 | O6 | Benchmark data is original | Done | Generated from our own word lists |
-| O7 | Citation file | Missing | |
+| O7 | Citation file | Done | `CITATION.cff` |
 
 ## P. Repository and release
 
@@ -282,11 +283,11 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | P1 | Clean default branch | Done | Work reaches `main` through pull requests |
 | P2 | Version tags and releases | Missing | 0 tags |
 | P3 | Package builds with prompts included | Done | Wheel built; 3 prompt files present |
-| P4 | Publish workflow | Missing | |
+| P4 | Publish workflow | Partial | Workflow added; the trusted publisher is not yet registered on PyPI |
 | P5 | Lock file committed | Done | `uv.lock` |
 | P6 | Ignore rules | Done | `.ctx/`, `.env`, `bench_out/` |
 | P7 | Branch protection | Done | `main` needs a pull request and the four CI jobs to pass; no force pushes or deletion; applies to admins too |
-| P8 | Dependency update and audit | Missing | |
+| P8 | Dependency update and audit | Partial | Dependabot configuration added; alerts are a repository setting and still off |
 
 ## Q. Observability
 
