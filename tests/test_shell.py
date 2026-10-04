@@ -105,13 +105,50 @@ def test_background_job_keeps_running_for_the_next_command(shell):
     assert "done" in shell.run("sleep 3; cat marker.txt").output
 
 
+# The commands in the next tests are bounded on purpose. An earlier version used `yes`,
+# the kill did not reach it on Windows, and three orphans wrote 77 GB to the temp folder.
+HEARTBEAT = "while true; do date +%s%N > beat.txt; sleep 0.2; done"
+BOUNDED_FLOOD = "for i in $(seq 1 400); do head -c 100000 /dev/zero | tr '\\0' 'a'; done"  # 40 MB
+
+
+def _beats_stopped(workdir) -> bool:
+    import time
+
+    time.sleep(0.6)
+    first = (workdir / "beat.txt").read_text()
+    time.sleep(1.2)
+    return (workdir / "beat.txt").read_text() == first
+
+
+def test_timeout_kills_every_process_the_command_started(workdir, session_dir):
+    shell = Shell(workdir, session_dir, Config(command_timeout=2))
+    result = shell.run(f"({HEARTBEAT}) & {HEARTBEAT}")
+    assert result.timed_out
+    assert _beats_stopped(workdir)  # both loops are dead, not orphaned
+
+
 def test_runaway_output_is_killed(workdir, session_dir):
-    shell = Shell(workdir, session_dir, Config(command_timeout=30, max_output_bytes=200_000))
-    result = shell.run("yes abcdefghij")
+    shell = Shell(workdir, session_dir, Config(command_timeout=60, max_output_bytes=200_000))
+    result = shell.run(BOUNDED_FLOOD)
     assert result.output_limit and result.exit_code == -1 and not result.timed_out
-    assert result.seconds < 15
+    assert result.seconds < 30
+    # The output file could be deleted, so nothing still has it open for writing.
+    assert not list(shell.state.glob("out-*.bin"))
     text = format_observation(result, "turn-0001", session_dir / "outputs", shell.cfg)
     assert "killed: output passed" in text
+
+
+def test_close_ends_background_jobs(workdir, session_dir):
+    import os
+
+    shell = Shell(workdir, session_dir, Config(command_timeout=20))
+    shell.run(f"({HEARTBEAT}) &")
+    assert "alive" in shell.run("sleep 1; test -s beat.txt && echo alive").output
+    if os.name != "nt":
+        shell.run("pkill -f beat.txt || true")  # POSIX has no per-command job to close
+        return
+    shell.close()
+    assert _beats_stopped(workdir)
 
 
 def test_large_finished_output_is_read_as_head_and_tail_only(workdir, session_dir):

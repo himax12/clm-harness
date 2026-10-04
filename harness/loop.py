@@ -15,6 +15,7 @@ from .redact import Redactor, removed_names, secret_values
 from .shell import Shell, cap_to_room, format_observation
 
 PROMPTS = Path(__file__).parent / "prompts"
+SCHEMA = 1  # version of the transcript's event format; bump when an event changes shape
 
 
 @dataclass
@@ -26,6 +27,8 @@ class ModelReply:
     stop_reason: str = "end_turn"  # tool_use | end_turn | max_tokens | refusal | invalid_tool
     usage: Usage = field(default_factory=Usage)
     served_by: str = ""
+    refusal: str = ""  # category and explanation when stop_reason is "refusal"
+    dropped_calls: int = 0  # tool calls after the first in the same reply
 
 
 class Model(Protocol):
@@ -43,10 +46,11 @@ class TaskDriver(Protocol):
 @dataclass
 class RunResult:
     status: str  # finished | step_limit | call_limit | cost_limit | time_limit
-    #              | context_exhausted | refusal | error
+    #              | context_exhausted | refusal | interrupted | error
     answer: str
     usage: Usage
     session_dir: Path
+    dollars: float = 0.0
 
 
 class ScriptedModel:
@@ -94,10 +98,44 @@ def run(
     model: Model,
     driver: TaskDriver | None = None,
     compactor: Callable | None = None,
+    progress: Callable[[str], None] | None = None,
 ) -> RunResult:
+    """Run one task to the end. Whatever happens, the session on disk is closed:
+    a `finish` event and `usage.json` are written even on Ctrl+C or a harness bug."""
     workdir = Path(workdir).resolve()
     session = Session(workdir, cfg)
-    shell = Shell(workdir, session.dir, cfg)
+    crash: Exception | None = None
+    shell: Shell | None = None
+    try:
+        shell = Shell(workdir, session.dir, cfg)
+        status, answer = _turns(task, workdir, cfg, model, driver, compactor, session, shell,
+                                progress or (lambda line: None))
+    except KeyboardInterrupt:
+        status, answer = "interrupted", "interrupted by the user"
+    except Exception as e:
+        status, answer = "error", f"harness error: {type(e).__name__}: {e}"
+        crash = e
+    finally:
+        if shell:
+            shell.close()  # nothing the agent started may outlive the run
+    session.event("finish", session.turn, status=status, answer=answer)
+    session.write_usage(status)
+    if crash:
+        raise crash
+    return RunResult(status, answer, session.usage, session.dir, session.dollars)
+
+
+def _turns(
+    task: str,
+    workdir: Path,
+    cfg: Config,
+    model: Model,
+    driver: TaskDriver | None,
+    compactor: Callable | None,
+    session: Session,
+    shell: Shell,
+    progress: Callable[[str], None],
+) -> tuple[str, str]:
     est = Estimator()
     nudger = Nudger()
     system = load_system(cfg, shell.scripting_hint() if cfg.mode == "clm" else "")
@@ -114,7 +152,7 @@ def run(
 
     redact = Redactor(secret_values(workdir, cfg.env_passthrough))
     session.event(
-        "start", 0, task=task, mode=cfg.mode, model=cfg.model, limit=cfg.limit,
+        "start", 0, schema=SCHEMA, task=task, mode=cfg.mode, model=cfg.model, limit=cfg.limit,
         env_removed=len(removed_names(cfg.env_passthrough)), secrets_redacted=len(redact.values),
     )
     if driver and (first := driver.start()):
@@ -134,7 +172,7 @@ def run(
         if calls >= cfg.lm_call_cap:
             status = "call_limit"
             break
-        if session.usage.cost() >= cfg.max_cost_usd:
+        if session.dollars >= cfg.max_cost_usd:
             status = "cost_limit"
             break
         if time.monotonic() - started >= cfg.max_wall_seconds:
@@ -161,6 +199,7 @@ def run(
                 "rollback", turn, dropped=[b.id for b in dropped], tokens_before=tokens,
                 tokens_after=size(),
             )
+            progress(f"      rollback: dropped {len(dropped)} blocks, {tokens:,} -> {size():,}")
             continue
 
         rendered = ""
@@ -180,16 +219,21 @@ def run(
             break
         calls += 1
         session.bump("model_calls")
-        session.add_usage(reply.usage)
+        session.add_usage(reply.usage, reply.served_by)
         est.calibrate(reply.usage.prompt_total, raw_request)
         session.event(
             "reply", turn, text=reply.text, thinking=reply.thinking, command=reply.command,
             restart=reply.restart, stop_reason=reply.stop_reason, served_by=reply.served_by,
-            usage=vars(reply.usage), context_tokens=tokens,
+            usage=vars(reply.usage), context_tokens=tokens, refusal=reply.refusal,
+            dropped_calls=reply.dropped_calls,
         )
+        shown = " ".join((reply.command or "(no command)").split())[:70]
+        progress(f"{turn:>4}  ctx={tokens:>7,}  ${session.dollars:6.2f}  $ {shown}")
 
         if reply.stop_reason == "refusal":
             status = "refusal"
+            detail = f" ({reply.refusal})" if reply.refusal else ""
+            answer = "the API refused the request" + detail
             break
         if reply.stop_reason == "max_tokens":
             # A cut-off reply can carry a truncated command that still parses. Never run it.
@@ -209,7 +253,8 @@ def run(
             if truncated_in_row > 2:
                 answer = "the bash call had invalid input three times in a row"
                 break
-            nb = add("notice", "Your bash call had invalid input. Call bash with a `command` string.")
+            nb = add("notice",
+                     "Your bash call had invalid input. Call bash with a `command` string.")
             session.event("notice", turn, id=nb.id, text=nb.body)
             continue
         truncated_in_row = 0
@@ -277,10 +322,13 @@ def run(
                 )
                 refused_in_row = 0
                 rollbacks_in_row = 0
+                progress(f"      edit applied: {edit.before_tokens:,} -> "
+                         f"{edit.after_tokens:,} tokens")
             elif edit.status == "refused":
                 session.bump("edits_refused")
                 session.event("edit_refused", turn, reason=edit.reason)
                 refused_in_row += 1
+                progress(f"      edit REFUSED: {edit.reason}")
 
         parts = [p for p in (reply.thinking.strip(), reply.text.strip()) if p]
         parts.append("$ (restart shell)" if reply.restart else f"$ {command}")
@@ -291,6 +339,10 @@ def run(
         note = receipt(edit, len(ctx.blocks), cfg.limit, touched="CTX" in command)
         if note:
             body += "\n" + note
+        if reply.dropped_calls:
+            # Running them would break the rule that the mirror is rewritten between commands.
+            body += (f"\n[Only your first bash call was run; {reply.dropped_calls} more in the "
+                     "same reply were ignored. Send one command per reply.]")
         out = ctx.add("output", body)
         total = size()
         over = " OVER the limit; compact now" if total > cfg.limit else ""
@@ -319,6 +371,4 @@ def run(
         if driver and (nxt := driver.after_command(command, observation)):
             add("input", nxt)
 
-    session.event("finish", turn, status=status, answer=answer)
-    session.write_usage(status)
-    return RunResult(status, answer, session.usage, session.dir)
+    return status, answer

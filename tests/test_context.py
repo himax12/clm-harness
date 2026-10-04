@@ -4,7 +4,6 @@ import pytest
 
 from harness.context import (
     FIRST_LINE,
-    ParseError,
     apply_edit,
     parse,
     raw_tokens,

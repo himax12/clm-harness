@@ -154,7 +154,7 @@ def apply_edit(
             return refuse(f"block {b.id} is a user message and cannot be removed")
 
     same = len(candidate) == len(ctx.blocks) and all(
-        c.id == o.id and c.body == o.body for c, o in zip(candidate, ctx.blocks)
+        c.id == o.id and c.body == o.body for c, o in zip(candidate, ctx.blocks, strict=True)
     )
     if same:
         return EditResult("unchanged", "", before, before)
@@ -168,7 +168,7 @@ def apply_edit(
     first_changed = next(
         (
             i
-            for i, (c, o) in enumerate(zip(candidate, ctx.blocks))
+            for i, (c, o) in enumerate(zip(candidate, ctx.blocks, strict=False))
             if c.id != o.id or c.body != o.body
         ),
         min(len(candidate), len(ctx.blocks)),

@@ -1,0 +1,32 @@
+# Changelog
+
+Notable changes to this project. Versions follow [semantic versioning](https://semver.org/); nothing has been released yet.
+
+## Unreleased
+
+### Added
+
+- Agent loop: one bash command per turn, with step, model-call, cost and wall-clock limits.
+- Model-managed context: the context file, whole-edit validation, receipts, a per-block size ledger, notices at 25%, 50% and 75% of the limit, and rollback on overflow.
+- History: append-only transcript, block originals, snapshots, `harness undo`.
+- Claude integration: one request block per context block, prompt caching, reasoning summaries, retries, cost tracking at the serving model's prices.
+- Baseline mode: clear old outputs, then summarise, then drop.
+- Benchmark: key-value and ledger streams, exact-match scorer, run matrix with a spend ceiling.
+- Commands: `run`, `doctor`, `sessions`, `log`, `undo`, `bench`, `report`.
+- Safety: blocked destructive commands, `git push` refused without `--allow-push`, secret variables removed from the agent's environment, secrets redacted from stored output, a 10 MB output cap, `--confirm`.
+- Per-turn progress output; `--quiet` turns it off.
+- `--model`, `--effort`, `--timeout`, `--task-file`.
+- `.ctx/` ignores itself in git.
+- Configuration is validated when it is built.
+- CI on Linux and Windows; ruff lint.
+
+### Fixed
+
+- Prompt cache missed on every turn because request blocks ended in whitespace, which the API trims from the final block.
+- On Windows a timed-out command's child processes survived the kill. Commands now run in a job object, and everything they start is ended on timeout and at the end of the run.
+- A background job held the turn open until it exited.
+- A command with large output was buffered whole in memory.
+- Ctrl+C or a harness error left a session without a `finish` event or `usage.json`.
+- The safety check refused notes that merely mentioned a blocked command.
+- Extra tool calls in one reply were dropped without telling the model.
+- The refusal category was not recorded.

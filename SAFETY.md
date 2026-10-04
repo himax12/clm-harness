@@ -14,8 +14,8 @@ By default the agent runs unattended, with your user's permissions, in the folde
 | No push by default | `git push` is refused unless you start the run with `--allow-push`. |
 | Secrets removed from the environment | Variables whose names look secret (tokens, passwords, keys, credentials, anything `ANTHROPIC_*`) are not passed to the agent's commands. `--pass-env NAME` lets one through. |
 | Secrets redacted from output | The values of those variables, the values in any `.env` file in the working folder, and common key formats are replaced with `[REDACTED]` before command output is sent to the model or written to disk. |
-| Time limit | A command is killed, with its child processes, after 120 seconds. |
-| Output limit | A command that prints more than 10 MB is killed. |
+| Time limit | A command is killed after 120 seconds, together with everything it started. |
+| Output limit | A command that prints more than 10 MB is killed the same way. |
 | Run limits | Each run stops at a step, model-call, cost and wall-clock limit. |
 | Approval mode | `--confirm` shows every command and waits for you to approve it. |
 | No interactive input | Commands get no stdin, so a prompt cannot hang the run. |
@@ -27,7 +27,7 @@ By default the agent runs unattended, with your user's permissions, in the folde
 - **The blocked list is a floor.** It matches a few obvious command shapes. The same damage can be done another way, for example through a script.
 - **Redaction only catches what it knows.** A secret in some other file or format, or one that is encoded before printing, is not recognised.
 - **It does not limit CPU, memory, disk or the number of processes.**
-- **It does not clean up background jobs.** A process the agent starts with `&` can outlive the run.
+- **On Linux and macOS it does not clean up background jobs.** A process the agent starts with `&` can outlive the run there. On Windows every process a command starts is ended when the run ends.
 - **It does not defend against prompt injection.** Text the agent reads from files, command output or the web arrives in its context alongside your task, and could contain instructions.
 
 ## How to run it safely
@@ -41,7 +41,7 @@ By default the agent runs unattended, with your user's permissions, in the folde
 ## Where your data goes
 
 - **To Anthropic.** Everything in the agent's context is sent to the Claude API on every turn: your task, the commands it runs, their output, and the contents of any file it reads. A refused request may be retried on another Anthropic model.
-- **To disk.** Each run writes a full record to `<working folder>/.ctx/sessions/<id>/`: every reply, command and output, in plain text. Nothing there is deleted automatically. Add `.ctx/` to the repo's ignore file so that it is not committed.
+- **To disk.** Each run writes a full record to `<working folder>/.ctx/sessions/<id>/`: every reply, command and output, in plain text. Nothing there is deleted automatically. The folder contains its own ignore file, so git does not pick it up.
 - **Nowhere else.** The harness has no telemetry and makes no other network calls.
 
 ## Reporting a problem

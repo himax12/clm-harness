@@ -1,0 +1,5 @@
+# Bash reads the prompts and scripts in this repo and fails on CRLF, so everything is
+# stored and checked out with LF on every platform.
+* text=auto eol=lf
+*.png binary
+*.jpg binary

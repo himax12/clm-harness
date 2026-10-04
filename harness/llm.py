@@ -83,12 +83,18 @@ def parse_response(response) -> ModelReply:
     )
     if reply.stop_reason == "stop_sequence":
         reply.stop_reason = "end_turn"
+    if reply.stop_reason == "refusal":
+        details = getattr(response, "stop_details", None)
+        parts = [getattr(details, "category", None), getattr(details, "explanation", None)]
+        reply.refusal = ": ".join(str(p) for p in parts if p) or "no category given"
+    reply.dropped_calls = max(0, len(tool_uses) - 1)
     if tool_uses and reply.stop_reason in ("tool_use", "max_tokens"):
         args = tool_uses[0].input  # only the first call; the mirror is rewritten between commands
+        command = args.get("command") if isinstance(args, dict) else None
         if isinstance(args, dict) and args.get("restart") is True:
             reply.restart = True
-        elif isinstance(args, dict) and isinstance(args.get("command"), str) and args["command"].strip():
-            reply.command = args["command"]
+        elif isinstance(command, str) and command.strip():
+            reply.command = command
         elif reply.stop_reason == "tool_use":
             reply.stop_reason = "invalid_tool"
     return reply

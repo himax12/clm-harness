@@ -70,6 +70,7 @@ class Shell:
         self.run_sh = self.state / "run.sh"
         self.user_sh = self.state / "user_cmd.sh"
         self._runs = 0
+        self._jobs: list[int] = []  # Windows job handles, one per command
         state = _q(to_posix(self.state))
         _write(
             self.run_sh,
@@ -113,8 +114,11 @@ class Shell:
         _write(self.user_sh, command + "\n")
         started = time.monotonic()
         kwargs: dict = {}
+        job = _new_job()
         if os.name == "nt":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            # Start suspended so the process is inside its job before it can spawn anything.
+            suspended = _CREATE_SUSPENDED if job else 0
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | suspended
         else:
             kwargs["start_new_session"] = True
         # Output goes to a file, not a pipe. With a pipe, a background job (`server &`)
@@ -134,6 +138,10 @@ class Shell:
                 env=command_env(self.cfg.env_passthrough),
                 **kwargs,
             )
+            if job:
+                job = _adopt(job, proc)
+            if job:
+                self._jobs.append(job)
             while True:
                 try:
                     proc.wait(timeout=0.2)
@@ -145,17 +153,21 @@ class Shell:
                         too_big = True
                     else:
                         continue
-                    self._kill_tree(proc)
+                    self._kill_tree(proc, job)
                     try:
                         proc.wait(timeout=10)
                     except subprocess.TimeoutExpired:
                         pass
                     break
         raw = _read_capped(sink_path, self.cfg.max_output_bytes)
-        try:
-            sink_path.unlink()
-        except OSError:
-            pass  # a background job may still hold it open
+        for _ in range(20):  # a killed process can take a moment to release the file
+            try:
+                sink_path.unlink()
+                break
+            except OSError:
+                if not (timed_out or too_big):
+                    break  # a background job still holds it open; that is allowed
+                time.sleep(0.1)
         text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n")
         killed = timed_out or too_big
         return CommandResult(
@@ -167,12 +179,13 @@ class Shell:
         )
 
     @staticmethod
-    def _kill_tree(proc: subprocess.Popen) -> None:
+    def _kill_tree(proc: subprocess.Popen, job: int | None = None) -> None:
+        """Kill a command and everything it started."""
         if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
-                capture_output=True,
-            )
+            if job:
+                _kernel32.TerminateJobObject(job, 1)
+            # Also by parent link, for the rare case the job could not be set up.
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
         else:
             import signal
 
@@ -180,6 +193,57 @@ class Shell:
                 os.killpg(proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+    def close(self) -> None:
+        """End every process any command started, including background jobs.
+
+        Windows only: there each command runs in its own job object. On POSIX a
+        background job that outlives its command is left running.
+        """
+        for job in self._jobs:
+            _kernel32.TerminateJobObject(job, 1)
+            _kernel32.CloseHandle(job)
+        self._jobs.clear()
+
+
+# On Windows, killing a process by its parent link (taskkill /T) does not reliably reach
+# the children Git Bash starts: a command like `yes` survived its own timeout and kept
+# writing to disk. A job object contains every descendant, whatever its parent link, and
+# TerminateJobObject ends them all.
+_CREATE_SUSPENDED = 0x00000004
+if os.name == "nt":
+    import ctypes
+    from ctypes import wintypes
+
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _ntdll = ctypes.WinDLL("ntdll")
+    _kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    _kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    _kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    _kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    _kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    _kernel32.TerminateJobObject.restype = wintypes.BOOL
+    _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    _kernel32.CloseHandle.restype = wintypes.BOOL
+    _ntdll.NtResumeProcess.argtypes = [wintypes.HANDLE]
+
+
+def _new_job() -> int | None:
+    if os.name != "nt":
+        return None
+    return _kernel32.CreateJobObjectW(None, None) or None
+
+
+def _adopt(job: int, proc: subprocess.Popen) -> int | None:
+    """Put a suspended process into the job, then let it run. Returns the job, or None
+    if the process could not be put in it."""
+    handle = int(proc._handle)
+    ok = _kernel32.AssignProcessToJobObject(job, handle)
+    _ntdll.NtResumeProcess(handle)
+    if not ok:
+        _kernel32.CloseHandle(job)
+        return None
+    return job
 
 
 def _read_capped(path: Path, cap: int) -> bytes:

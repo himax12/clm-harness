@@ -54,7 +54,7 @@ def run_one(task: str, mode: str, seed: int, pressure: float, out_dir: Path,
     return {
         "task": task, "mode": mode, "seed": seed, "pressure": pressure, "ops": len(ops),
         "status": result.status, "accuracy": round(score(ops, transcript), 4),
-        "dollars": round(result.usage.cost(), 4),
+        "dollars": round(result.dollars, 4),
         "input": result.usage.input, "output": result.usage.output,
         "cache_read": result.usage.cache_read, "cache_write": result.usage.cache_write,
         "model_calls": stats.get("model_calls", 0), "steps": stats.get("steps", 0),

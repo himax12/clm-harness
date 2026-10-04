@@ -1,9 +1,28 @@
+from pathlib import Path
+
 import pytest
 
 from harness.budget import Estimator
 from harness.config import Config
 from harness.context import Context
-from harness.shell import Shell
+from harness.shell import Shell, find_bash
+
+
+def _has_bash() -> bool:
+    try:
+        return Path(find_bash()).exists()
+    except RuntimeError:
+        return False
+
+
+def pytest_collection_modifyitems(config, items):
+    """Without bash, skip the tests that run real commands instead of failing them."""
+    if _has_bash():
+        return
+    skip = pytest.mark.skip(reason="needs bash (Git Bash on Windows)")
+    for item in items:
+        if {"workdir", "shell"} & set(getattr(item, "fixturenames", ())) or "matrix" in item.name:
+            item.add_marker(skip)
 
 
 @pytest.fixture(autouse=True)
