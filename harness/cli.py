@@ -76,10 +76,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 2
 
     overrides = {"mode": args.mode, "confirm": args.confirm, "allow_push": args.allow_push,
-                 "env_passthrough": tuple(args.pass_env or ())}
+                 "env_passthrough": tuple(args.pass_env or ()), "sandbox": args.sandbox,
+                 "sandbox_network": args.allow_net}
     for flag, field in (("budget", "budget_tokens"), ("max_steps", "max_steps"),
                         ("max_cost", "max_cost_usd"), ("model", "model"), ("effort", "effort"),
-                        ("timeout", "command_timeout")):
+                        ("timeout", "command_timeout"), ("sandbox_image", "sandbox_image")):
         if getattr(args, flag) is not None:
             overrides[field] = getattr(args, flag)
     try:
@@ -99,10 +100,18 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"could not create the Claude client: {e}", file=sys.stderr)
         print("Set ANTHROPIC_API_KEY and retry.", file=sys.stderr)
         return 2
-    for path in dotenv_files(Path(args.dir)):
-        print(f"warning: {path} holds secrets the agent could read. Its values are redacted "
-              "from command output, but a command can still open the file. Use --confirm, or "
-              "work in a folder without it.", file=sys.stderr)
+    if cfg.sandbox == "docker":
+        from .sandbox import docker_status
+
+        usable, detail = docker_status()
+        if not usable:
+            print(f"the sandbox cannot start: {detail}", file=sys.stderr)
+            return 2
+    else:
+        for path in dotenv_files(Path(args.dir)):
+            print(f"warning: {path} holds secrets the agent could read. Its values are redacted "
+                  "from command output, but a command can still open the file. Use --confirm, "
+                  "--sandbox docker, or work in a folder without it.", file=sys.stderr)
     compactor = make_compactor(model.summarise) if cfg.mode == "baseline" else None
     progress = None if args.quiet else (lambda line: print(line, file=sys.stderr, flush=True))
     result = run(task, Path(args.dir), cfg, model, compactor=compactor, progress=progress)
@@ -183,7 +192,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     print(f"info  {len(removed)} secret-looking environment variables are hidden from the "
           "agent's commands" + (f": {', '.join(removed)}" if removed else ""))
     for path in dotenv_files(Path(args.dir)):
-        print(f"warn  {path} is readable by the agent if you run it in this folder")
+        print(f"warn  {path} is readable by the agent if you run it in this folder "
+              "without --sandbox docker")
+    from .sandbox import docker_status
+
+    usable, detail = docker_status()
+    print(f"info  sandbox: {detail}" + ("" if usable else "; --sandbox docker will not work"))
     return 0 if ok else 1
 
 
@@ -217,9 +231,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser(
         "run", help="run a task with Claude",
-        epilog="The agent runs shell commands unattended with your permissions. A short list "
-               "of destructive commands is refused, but this is not a sandbox. Read SAFETY.md "
-               "before pointing it at anything you care about.",
+        epilog="Without --sandbox docker the agent runs shell commands unattended with your "
+               "permissions. A short list of destructive commands is refused, but that is not "
+               "a sandbox. Read SAFETY.md before pointing it at anything you care about.",
     )
     p.add_argument("task", nargs="?", help="what to do (or use --task-file)")
     p.add_argument("--task-file", metavar="PATH", help="read the task from a file, or - for stdin")
@@ -238,6 +252,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--allow-push", action="store_true", help="let the agent run `git push`")
     p.add_argument("--pass-env", action="append", metavar="NAME",
                    help="let the agent's commands see this secret-looking variable (repeatable)")
+    p.add_argument("--sandbox", choices=("none", "docker"), default="none",
+                   help="docker: run the agent's commands in a container that sees only --dir")
+    p.add_argument("--sandbox-image", metavar="IMAGE",
+                   help="container image to use (default: a small one built on first use)")
+    p.add_argument("--allow-net", action="store_true",
+                   help="give the sandbox network access (off by default)")
     p.set_defaults(func=cmd_run)
 
     p = sub.add_parser("doctor", help="check the shell and the API credential; spends nothing")

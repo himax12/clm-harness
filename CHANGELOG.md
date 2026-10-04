@@ -19,6 +19,8 @@ Notable changes to this project. Versions follow [semantic versioning](https://s
 - `.ctx/` ignores itself in git.
 - Configuration is validated when it is built.
 - CI on Linux and Windows; ruff lint.
+- MIT licence.
+- Sandbox: `--sandbox docker` runs the agent's commands in a container that sees only the working folder, with no network (`--allow-net` turns it on), no host environment, dropped capabilities and limits on memory, CPU and processes. `--sandbox-image` chooses the image.
 
 ### Fixed
 

@@ -15,6 +15,7 @@ MODEL_PRICES = {
 }
 PRICES = MODEL_PRICES["claude-opus-5-5"]
 TESTED_MODELS = ("claude-opus-5-5",)  # the only model the request shape has been run against
+SANDBOX_IMAGE = "clm-harness-sandbox:1"  # bump the tag when the Dockerfile in sandbox.py changes
 
 
 def prices_for(model: str | None) -> tuple[dict[str, float], bool]:
@@ -53,9 +54,19 @@ class Config:
     allow_push: bool = False  # `git push` is refused unless this is set
     # Secret-looking environment variables the agent's commands may see after all.
     env_passthrough: tuple[str, ...] = ()
+    sandbox: str = "none"  # "none": commands run on the host | "docker": in a container
+    sandbox_image: str = SANDBOX_IMAGE  # the default is built on first use
+    sandbox_network: bool = False  # the container has no network unless this is set
+    sandbox_memory: str = "2g"
+    sandbox_cpus: float = 2.0
+    sandbox_pids: int = 512
 
     def __post_init__(self) -> None:
         problems = []
+        if self.sandbox not in ("none", "docker"):
+            problems.append(f"sandbox must be none or docker, not {self.sandbox!r}")
+        if self.sandbox_cpus <= 0 or self.sandbox_pids <= 0:
+            problems.append("sandbox_cpus and sandbox_pids must be positive")
         if self.mode not in ("clm", "baseline"):
             problems.append(f"mode must be clm or baseline, not {self.mode!r}")
         if self.effort not in ("low", "medium", "high", "xhigh", "max"):

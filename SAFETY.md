@@ -4,7 +4,31 @@ This harness lets a language model run shell commands on your machine. Read this
 
 ## In one paragraph
 
-By default the agent runs unattended, with your user's permissions, in the folder you give it. The harness refuses a short list of destructive commands and keeps secrets out of the agent's environment and out of stored output. It is **not a sandbox**: a command can still read, write or delete any file your user can, and can use the network.
+By default the agent runs unattended, with your user's permissions, in the folder you give it. The harness refuses a short list of destructive commands and keeps secrets out of the agent's environment and out of stored output. Without the sandbox, that is all: a command can still read, write or delete any file your user can, and can use the network. With `--sandbox docker` the commands run in a container that sees only the working folder and has no network.
+
+## The sandbox
+
+`harness run ... --sandbox docker` runs every command in a Docker container that lives for the run and is removed when it ends. It needs Docker running Linux containers; `harness doctor` says whether that is so. The first use builds a small image (about 335 MB).
+
+| In the sandbox | Detail |
+|---|---|
+| Files | Only the working folder (at `/work`) and the run's session folder are visible. Your home folder, SSH keys, cloud credentials and other projects are not. |
+| `.env` files | A `.env` file at the top of the working folder reads as empty. One in a subfolder is still readable. |
+| Network | None. `--allow-net` turns it on, for all destinations. |
+| Environment | None of your environment variables are passed in. `--pass-env NAME` passes one. |
+| Limits | 2 GB of memory, 2 CPUs, 512 processes, 1 GB for `/tmp`. |
+| Privileges | All Linux capabilities are dropped and privilege escalation is disabled. On Linux and macOS the commands run as your user, on Windows as the container's root. |
+| Lifetime | Everything the agent started ends with the run. A container whose harness died is removed by itself 15 minutes after the run's time limit. |
+
+What the sandbox does not do:
+
+- **It does not limit writes to the working folder.** The agent can still delete or fill it. Work on a copy, or commit first.
+- **It does not filter the network.** It is off or on; there is no list of allowed hosts.
+- **It is only as strong as Docker.** A container shares the host's kernel. It stops mistakes and ordinary attacks, not a kernel exploit.
+- **It does not stop prompt injection.** It limits what an injected instruction can reach.
+- **It has been run on Windows with Docker Desktop only.** Linux and macOS use the same code but are untried.
+
+Some tools the project needs may be missing from the default image. `--sandbox-image NAME` uses another image; it must contain `bash`.
 
 ## What the harness does
 
@@ -20,7 +44,7 @@ By default the agent runs unattended, with your user's permissions, in the folde
 | Approval mode | `--confirm` shows every command and waits for you to approve it. |
 | No interactive input | Commands get no stdin, so a prompt cannot hang the run. |
 
-## What it does not do
+## What it does not do without the sandbox
 
 - **It does not confine file access.** The agent can read `~/.ssh`, cloud credentials, browser data, or a `.env` in the working folder, and can write outside the working folder.
 - **It does not restrict the network.** A command can download and run code, or send data out.
@@ -32,7 +56,7 @@ By default the agent runs unattended, with your user's permissions, in the folde
 
 ## How to run it safely
 
-1. Run it in a container or a virtual machine when the task or the repo is not fully trusted.
+1. Use `--sandbox docker` whenever the task or the repo is not fully trusted, and whenever you leave it unattended.
 2. Give it a scratch copy of a repo, not your only copy. Commit or back up first.
 3. Use `--confirm` the first few times, and for any task that touches things outside the working folder.
 4. Keep `.env` files and other secrets out of the working folder. `harness doctor --dir <folder>` and `harness run` warn when they find one.
