@@ -6,7 +6,7 @@ Thanks for looking. This is a small experimental project; issues and focused pul
 
 - Read [AGENTS.md](AGENTS.md). It lists the layout and the rules that are easy to break, most of which protect prompt caching, the edit guarantees or the user's secrets.
 - For anything larger than a bug fix, open an issue first so the approach can be agreed.
-- [AUDIT.md](AUDIT.md) lists known gaps. Picking one up is a good first contribution; say which item you are taking.
+- Known gaps are tracked as issues. Picking one up is a good first contribution; say on the issue that you are taking it.
 
 ## Setup
 
@@ -23,7 +23,7 @@ The tests run real bash commands. On Windows they need Git for Windows; without 
 1. Work on a branch.
 2. Add or change a test with every behaviour change.
 3. Keep `SAFETY.md` true if you touch `safety.py`, `redact.py` or `shell.py`.
-4. If you learn something from a live run, record it in `IMPLEMENTATION.md` with what you measured.
+4. If you learn something from a live run, say what you measured in the pull request.
 5. Run the tests and the linter before opening a pull request.
 
 A change to the request, the prompts or the loop can alter how the model behaves and what a run costs. Say so in the pull request, and say whether you ran it live. Do not commit benchmark results you did not produce.

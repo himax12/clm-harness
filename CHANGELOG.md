@@ -30,7 +30,6 @@ Notable changes to this project. Versions follow [semantic versioning](https://s
 - A second command name, `clm-harness`.
 - Python 3.10 and 3.11 are supported and tested.
 - A publish workflow for PyPI, a Dependabot configuration, a citation file and a feature-request template.
-- `LAUNCH.md` (launch checklist and architecture review) and `TODO.md` (the ordered work list).
 - Sandbox: `--sandbox docker` runs the agent's commands in a container that sees only the working folder, with no network (`--allow-net` turns it on), no host environment, dropped capabilities and limits on memory, CPU and processes. `--sandbox-image` chooses the image.
 
 ### Changed
