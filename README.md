@@ -39,39 +39,70 @@ How it relates to nearby work:
 | [mini-swe-agent](https://github.com/SWE-agent/mini-swe-agent) | Nothing; the history is kept as it is | A minimal bash-only agent. This project borrows its loop shape |
 | **clm-harness** | The model, by editing a file, with every edit validated and reversible | MIT; Anthropic's hosted API only, for now |
 
-## Requirements
-
-- Python 3.10 or newer and [uv](https://docs.astral.sh/uv/)
-- Bash. On Windows, install [Git for Windows](https://git-scm.com/download/win).
-- An Anthropic API key with credit. Each run is billed.
-- Optional: Docker, for the sandbox.
-
-Development and all live runs so far have been on Windows 11 with Git Bash. The test suite also runs on Linux in CI. macOS is untested, and no live run has been made outside Windows.
-
 ## Install
 
-```
-git clone https://github.com/himax12/clm-harness
-cd clm-harness
-uv sync
-```
+One command installs the harness for your user, in its own environment with its own Python. It needs no administrator rights and installs nothing system-wide. It uses [uv](https://docs.astral.sh/uv/), and installs uv first if you do not have it.
 
-Put your key in a `.env` file in the project folder (it is ignored by git):
+**macOS, Linux and WSL**
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
+curl -LsSf https://raw.githubusercontent.com/himax12/clm-harness/main/install.sh | sh
 ```
 
-Check the setup. This spends nothing:
+**Windows** (PowerShell)
 
 ```
-uv run harness doctor
+irm https://raw.githubusercontent.com/himax12/clm-harness/main/install.ps1 | iex
 ```
+
+Then save your Anthropic API key and check the setup. Neither step spends anything:
+
+```
+harness setup
+harness doctor
+```
+
+`harness setup` stores the key in your user settings folder (`~/.config/clm-harness/.env`, or `%APPDATA%\clm-harness\.env` on Windows). An `ANTHROPIC_API_KEY` environment variable works too, and takes precedence.
+
+### What each system needs
+
+The harness runs the agent's commands in one of two ways, and you need at least one of them.
+
+| | In the Docker sandbox (recommended) | Directly on your machine |
+|---|---|---|
+| **macOS** | Docker Desktop: `brew install --cask docker` | Nothing more; the system's bash is used |
+| **Linux** | [Docker Engine](https://docs.docker.com/engine/install/) | Nothing more |
+| **Windows** | Docker Desktop: `winget install Docker.DockerDesktop` | Git for Windows: `winget install Git.Git` |
+| **WSL** | Docker Desktop with WSL integration, or Docker Engine inside WSL | Nothing more |
+
+`harness doctor` tells you which of the two will work on your machine and what to install if neither does. Each run is billed to your Anthropic API key.
+
+### Other ways to install
+
+```
+uv tool install git+https://github.com/himax12/clm-harness     with uv
+pipx install git+https://github.com/himax12/clm-harness        with pipx
+```
+
+To work on the code, clone the repository and run `uv sync`; then put `uv run` in front of every command below.
+
+### Update and remove
+
+```
+uv tool upgrade clm-harness
+uv tool uninstall clm-harness
+```
+
+Removing the tool leaves your key file and any `.ctx/` session folders in place.
+
+### What has been tried where
+
+Development and every live run so far have been on Windows 11 with Git Bash. The test suite and the installer run in CI on Linux, macOS and Windows. No live run has been made on Linux or macOS yet.
 
 ## Use
 
 ```
-uv run harness run "add a --verbose flag to cli.py and a test for it" --dir path/to/repo
+harness run "add a --verbose flag to cli.py and a test for it" --dir path/to/repo
 ```
 
 The agent works in `--dir`. Progress is printed one line per turn, and the final answer at the end.
@@ -106,7 +137,7 @@ Useful flags for `run`:
 To run a task in the sandbox:
 
 ```
-uv run harness run "fix the failing test" --dir path/to/repo --sandbox docker
+harness run "fix the failing test" --dir path/to/repo --sandbox docker
 ```
 
 The project appears at `/work` inside the container. A task that needs to download packages also needs `--allow-net`.

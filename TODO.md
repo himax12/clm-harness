@@ -34,6 +34,16 @@ Nothing below can finish without these.
 - [ ] Apply the sandbox-default decision. [AR14]
 - [x] Add a publish workflow using PyPI trusted publishing, triggered by a GitHub release. [PK5]
 
+### Setup on every system
+
+- [x] One-line installers for macOS, Linux, WSL and Windows, built on uv. [PK6]
+- [x] `harness setup` to save the key where an installed copy finds it. [VS7]
+- [x] `harness doctor` says what to install on each system; bash is optional when Docker works.
+- [x] macOS in CI, and the installer run on all three systems in CI. [K2 in `AUDIT.md`]
+- [ ] Point the installers at PyPI once `clm-harness` is published; today they install from GitHub. [PK6]
+- [ ] One live run on macOS and one on Linux. *Needs a machine and a few cents.*
+- [ ] A Homebrew tap, and winget and Scoop manifests. Each needs a published release first.
+
 ### Writing
 
 - [x] README: badges for CI, licence and Python. [VS5]

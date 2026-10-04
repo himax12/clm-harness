@@ -64,6 +64,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | 4 Oct 2026 | O1 fixed | MIT licence added: `LICENSE`, `pyproject.toml`, README. |
 | 4 Oct 2026 | A7, B4, B5, B6 fixed; A6, B11 partly | `--sandbox docker`: commands run in a container that sees only the working and session folders, with no network, no host environment, dropped capabilities and resource limits. Opt-in. |
 | 4 Oct 2026 | I11, K7, O7 fixed; P4, P8 partly | Release 0.1 preparation: one package `clm_harness`, a second command name, Python 3.10 and 3.11, a publish workflow, Dependabot configuration, a citation file. |
+| 4 Oct 2026 | K2 improved | One-line installers for macOS, Linux and Windows; `harness setup`; platform hints in `doctor`; macOS tests and installer checks in CI. |
 
 ---
 
@@ -79,7 +80,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | A6 | Agent cannot read a `.env` in its working folder | Partial | In the sandbox a top-level `.env` reads as empty; one in a subfolder is still readable. Without the sandbox its values are only redacted from output, and `run` and `doctor` warn |
 | A7 | Agent cannot read `~/.ssh`, `~/.aws`, git credentials | Done | With `--sandbox docker` only the working and session folders are mounted; tested. Without it they are readable |
 | A8 | Secrets never written to transcripts | Partial | Removed variables' values, `.env` values and common key formats are redacted. A secret in any other file or format is not |
-| A9 | Credential check before a run | Done | `harness doctor`; uses free token counting; verified live |
+| A9 | Credential check before a run | Done | `harness doctor`, which also says what to install when something is missing; `harness setup` saves and checks the key. Both free |
 | A10 | `.env` does not override the real environment | Done | Tested |
 | A11 | Other auth methods (profiles, Bedrock, Vertex) | Partial | The SDK supports profiles; never tried |
 
@@ -214,7 +215,7 @@ Resolved since the first audit: README, CI and lint, clean shutdown on Ctrl+C, p
 | # | Check | Status | Note |
 |---|---|---|---|
 | K1 | Windows with Git Bash | Done | Tested and run live |
-| K2 | Linux and macOS | Partial | The full test suite passes on Linux in CI. No live run on Linux; macOS untested |
+| K2 | Linux and macOS | Partial | The test suite and the installer pass on Linux and macOS in CI. No live run on either |
 | K3 | Bash discovery with override | Done | `HARNESS_BASH` |
 | K4 | `python3` stub detection | Done | |
 | K5 | Paths with spaces | Done | Tested |

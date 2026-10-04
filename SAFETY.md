@@ -68,6 +68,10 @@ Some tools the project needs may be missing from the default image. `--sandbox-i
 - **To disk.** Each run writes a full record to `<working folder>/.ctx/sessions/<id>/`: every reply, command and output, in plain text. Nothing there is deleted automatically. The folder contains its own ignore file, so git does not pick it up.
 - **Nowhere else.** The harness has no telemetry and makes no other network calls.
 
+## Where your API key is kept
+
+`harness setup` writes the key as plain text to `.env` in your user settings folder: `~/.config/clm-harness/` on macOS and Linux, `%APPDATA%\clm-harness\` on Windows. On macOS and Linux the file is readable by your user only. It is not encrypted and not stored in the system keychain. The key is never passed to the agent's commands, and its value is redacted from command output.
+
 ## Reporting a problem
 
 If you find a way to make the harness run a command it should refuse, or to leak a secret it should redact, please open an issue with the command and what happened. Leave real secrets out of the report.
