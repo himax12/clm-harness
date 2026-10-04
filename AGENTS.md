@@ -11,6 +11,7 @@ uv sync                         install
 uv run pytest -q                all tests (about 75 s; shell tests run real bash, sandbox tests real Docker)
 uv run pytest tests/test_context.py -q
 uv run ruff check .             lint (also run in CI)
+uv run harness setup            save the API key in the user's settings folder; spends nothing
 uv run harness doctor           check the shell and the API credential; spends nothing
 uv run harness run "<task>" --dir <folder> [--mode clm|baseline] [--budget N] [--max-cost D]
                                 [--sandbox docker] [--allow-net]
@@ -36,7 +37,7 @@ clm_harness/
   loop.py       the turn loop; Model and TaskDriver interfaces; ScriptedModel
   llm.py        the Claude request and response parsing (the only SDK import)
   baseline.py   clear-then-summarise compaction, the comparison mode
-  env.py        loads .env
+  env.py        loads .env; the user's settings folder
   redact.py     hides secret variables from commands; redacts secrets in output
   sandbox.py    runs the commands in a Docker container (`--sandbox docker`)
   cli.py        the commands above

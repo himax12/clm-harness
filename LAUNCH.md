@@ -61,7 +61,7 @@ A sensible path is a quiet public release first (labelled experimental), then th
 | PK3 | Command name is unlikely to collide | Done | `harness` and `clm-harness` both work |
 | PK4 | Version tag and release notes | Missing | No tags, no releases |
 | PK5 | Publish workflow | Partial | The workflow exists. The trusted publisher still has to be registered on PyPI |
-| PK6 | Install without cloning | Missing | After PyPI: `uvx clm-harness run ...` or `pipx install clm-harness` |
+| PK6 | Install without cloning | Partial | One-line installers for all three systems install from GitHub with uv, with no clone and no Python needed. They need the repository to be public. PyPI is still to come |
 | PK7 | Python versions as wide as the code allows | Done | 3.10 to 3.13. The suite passes on all four |
 | PK8 | Sandbox image easy to get | Partial | Built on first use, which needs network and about a minute. Publishing it to GitHub's container registry would remove that step |
 | PK9 | Wheel contains prompts and licence | Done | Checked by building it |
@@ -77,7 +77,7 @@ A sensible path is a quiet public release first (labelled experimental), then th
 | VS4 | Demo at the top of the README | Done | In pull request #4 |
 | VS5 | Badges: CI, licence, PyPI, Python | Partial | CI, licence and Python are in. The PyPI badge waits for the first release |
 | VS6 | Who it is for, and how it differs | Done | A section and a comparison table in the README |
-| VS7 | Working in under a minute | Partial | Needs a clone and `uv sync` today; see PK6 |
+| VS7 | Working in under a minute | Partial | One install command, then `harness setup` and `harness doctor`. Works once the repository is public |
 | VS8 | Launch post | Missing | The story is strong: the idea, the cache bug that cost every turn, the 77 GB incident, what was measured and what was not |
 | VS9 | Channels chosen | Missing | English: Show HN, r/LocalLLaMA, r/ClaudeAI, X, LinkedIn, dev.to. Chinese: a `README.zh-CN.md`, V2EX, Juejin, Zhihu, and a Gitee mirror |
 | VS10 | Paper authors and `pi-clm` author told | Missing | A courtesy, and they may link to it |

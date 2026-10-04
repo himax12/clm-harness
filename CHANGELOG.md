@@ -20,6 +20,11 @@ Notable changes to this project. Versions follow [semantic versioning](https://s
 - Configuration is validated when it is built.
 - CI on Linux and Windows; ruff lint.
 - MIT licence.
+- One-line installers: `install.sh` for macOS, Linux and WSL, and `install.ps1` for Windows. They install uv if needed, then the harness as a uv tool.
+- `harness setup` saves the API key in the user's settings folder, where an installed copy finds it.
+- `harness doctor` reports the system, says what to install when something is missing, and no longer fails for a missing bash when Docker can run the sandbox.
+- `harness run` stops with a clear message when there is no shell to run commands in.
+- CI runs the tests on macOS and runs the installer on Linux, macOS and Windows.
 - A second command name, `clm-harness`.
 - Python 3.10 and 3.11 are supported and tested.
 - A publish workflow for PyPI, a Dependabot configuration, a citation file and a feature-request template.

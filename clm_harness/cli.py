@@ -2,12 +2,23 @@ from __future__ import annotations
 
 import argparse
 import json
+import platform
 import sys
 from pathlib import Path
 
 from .env import load_dotenv
 from .redact import dotenv_files
 from .session import undo
+
+
+_BASH_HINT = {
+    "Windows": "Install it with `winget install Git.Git`, or use --sandbox docker.",
+}
+_DOCKER_HINT = {
+    "Windows": "Install Docker Desktop: `winget install Docker.DockerDesktop`.",
+    "Darwin": "Install Docker Desktop: `brew install --cask docker`.",
+    "Linux": "Install Docker Engine: https://docs.docker.com/engine/install/",
+}
 
 
 def _session_dir(arg: str, workdir: Path) -> Path:
@@ -108,6 +119,13 @@ def cmd_run(args: argparse.Namespace) -> int:
             print(f"the sandbox cannot start: {detail}", file=sys.stderr)
             return 2
     else:
+        from .shell import find_bash
+
+        try:
+            find_bash()
+        except RuntimeError as e:
+            print(f"{e} {_BASH_HINT.get(platform.system(), '')}".strip(), file=sys.stderr)
+            return 2
         for path in dotenv_files(Path(args.dir)):
             print(f"warning: {path} holds secrets the agent could read. Its values are redacted "
                   "from command output, but a command can still open the file. Use --confirm, "
@@ -162,7 +180,12 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         ok = ok and good
         print(f"{'ok  ' if good else 'FAIL'}  {label}: {detail}")
 
+    from .env import user_env_file
+    from .sandbox import docker_status
+
     cfg = Config()
+    docker_ok, docker_detail = docker_status()
+    print(f"info  system: {platform.system()} {platform.release()} ({platform.machine()})")
     report(sys.version_info >= (3, 10), "python", sys.version.split()[0])
     try:
         bash = find_bash()
@@ -171,12 +194,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
             hint = Shell(Path(tmp), Path(tmp) / "session", cfg).scripting_hint()
         report(True, "scripting tool for context edits", hint.replace("`", ""))
     except Exception as e:
-        report(False, "bash", str(e))
+        if docker_ok:
+            # In the sandbox the commands run in the container; the host needs no bash.
+            print(f"info  bash: not found on this machine ({e}) Runs need --sandbox docker.")
+        else:
+            report(False, "bash", f"{e} {_BASH_HINT.get(platform.system(), '')}".strip())
 
     source = next((n for n in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN") if os.environ.get(n)),
                   None)
     report(source is not None, "credential", f"found in {source}" if source
-           else "not set; put ANTHROPIC_API_KEY in .env (see .env.example)")
+           else f"not set; run `harness setup`, or put ANTHROPIC_API_KEY in {user_env_file()}")
     if source and not args.offline:
         try:
             from .llm import check_credential  # the only module that imports the SDK
@@ -192,11 +219,52 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     for path in dotenv_files(Path(args.dir)):
         print(f"warn  {path} is readable by the agent if you run it in this folder "
               "without --sandbox docker")
-    from .sandbox import docker_status
-
-    usable, detail = docker_status()
-    print(f"info  sandbox: {detail}" + ("" if usable else "; --sandbox docker will not work"))
+    if docker_ok:
+        print(f"info  sandbox: {docker_detail}")
+    else:
+        print(f"info  sandbox: {docker_detail}; --sandbox docker will not work. "
+              + _DOCKER_HINT.get(platform.system(), ""))
     return 0 if ok else 1
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Save the API key where an installed harness will find it."""
+    import getpass
+
+    from .env import save_user_key
+
+    if args.key_stdin or not sys.stdin.isatty():
+        key = sys.stdin.readline().strip()
+    else:
+        print("Paste your Anthropic API key (https://console.anthropic.com/settings/keys).")
+        key = getpass.getpass("API key (input is hidden): ").strip()
+    if not key:
+        print("no key given; nothing was saved", file=sys.stderr)
+        return 2
+    if not args.offline:
+        import os
+
+        from .config import Config
+
+        previous = os.environ.get("ANTHROPIC_API_KEY")
+        os.environ["ANTHROPIC_API_KEY"] = key
+        try:
+            from .llm import check_credential
+
+            check_credential(Config().model)  # free: counts tokens only
+        except Exception as e:
+            print(f"the key was not accepted: {type(e).__name__}: {str(e)[:160]}", file=sys.stderr)
+            print("Nothing was saved. Use --offline to save it without checking.", file=sys.stderr)
+            return 1
+        finally:
+            if previous is None:
+                os.environ.pop("ANTHROPIC_API_KEY", None)
+            else:
+                os.environ["ANTHROPIC_API_KEY"] = previous
+    path = save_user_key("ANTHROPIC_API_KEY", key)
+    print(f"saved to {path}" + ("" if args.offline else " (the key was accepted)"))
+    print("Next: harness doctor")
+    return 0
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -262,6 +330,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--dir", default=".", help="folder you intend to run in")
     p.add_argument("--offline", action="store_true", help="skip the API check")
     p.set_defaults(func=cmd_doctor)
+
+    p = sub.add_parser("setup", help="save your API key for this user; spends nothing")
+    p.add_argument("--key-stdin", action="store_true", help="read the key from standard input")
+    p.add_argument("--offline", action="store_true", help="save the key without checking it")
+    p.set_defaults(func=cmd_setup)
 
     p = sub.add_parser("bench", help="run the benchmark matrix")
     p.add_argument("--tasks", default="kv,ledger")
