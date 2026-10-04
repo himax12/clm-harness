@@ -1,0 +1,54 @@
+name: Integrations
+
+# Checks the plug-ins in integrations/ against the current releases of their hosts.
+# Kept apart from CI, and not a required check: a change upstream should show up here
+# without blocking unrelated pull requests.
+
+on:
+  pull_request:
+    paths:
+      - "integrations/**"
+      - "clm_harness/hostctx.py"
+      - ".github/workflows/integrations.yml"
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hermes:
+    name: Hermes Agent plug-in
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Get Hermes Agent
+        run: |
+          git clone --depth 1 https://github.com/NousResearch/hermes-agent "$RUNNER_TEMP/hermes-agent"
+          uv venv "$RUNNER_TEMP/hermes-venv" --python 3.14
+          uv pip install --python "$RUNNER_TEMP/hermes-venv/bin/python" -e "$RUNNER_TEMP/hermes-agent"
+      - name: Load the plug-in through Hermes's loader and drive it
+        run: |
+          "$RUNNER_TEMP/hermes-venv/bin/python" integrations/hermes/check.py \
+            "$RUNNER_TEMP/hermes-agent" integrations/hermes/clm
+
+  opencode:
+    name: opencode plug-in
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install clm-harness from this checkout
+        run: uv tool install .
+      - name: Type-check against opencode's types and drive the plug-in
+        working-directory: integrations/opencode
+        run: |
+          npm install
+          npm run check

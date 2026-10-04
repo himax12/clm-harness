@@ -127,18 +127,21 @@ Today the request in `llm.py` uses five things only Anthropic's own API accepts:
 
 ### EC. Other agents and tools
 
-Being used from another agent and bringing the idea into another agent are different things. A host agent such as Codex CLI, Claude Code or Hermes Agent owns its own context window, so a plug-in cannot make the host manage its context this way. What is possible is for the host to hand a task to this harness.
+There are two kinds of support. A host can hand a whole task to this harness (delegate), which works for any agent that accepts MCP servers. Or a plug-in can bring model-managed context into the host itself (native). An earlier version of this section said native support was impossible because a host owns its context window. That was wrong: Hermes Agent has a context engine plug-in slot, and opencode has a hook that edits the messages before each request. Codex CLI has neither; its hooks cannot change history. `integrations/README.md` has the details.
 
 | # | Check | Status | Note |
 |---|---|---|---|
 | EC1 | `AGENTS.md` at the root | Done | Read by Codex CLI and other agents working on the repository |
-| EC2 | Machine-readable result | Missing | A `--json` flag that prints status, answer, cost and session path |
+| EC2 | Machine-readable result | Done | `harness run --json` |
 | EC3 | Stable exit codes | Done | 0, 1 and 2 |
-| EC4 | An MCP server exposing one "run a task" tool | Missing | The widest route: Hermes Agent, Claude Code and Codex CLI all accept MCP servers |
-| EC5 | An agent skill describing when to call it | Missing | A short `SKILL.md`; Hermes Agent follows the agentskills.io format |
+| EC4 | An MCP server exposing one "run a task" tool | Done | `harness mcp`: one tool, `run_task`, sandboxed by default, with a cost ceiling. Called once from a live Codex CLI session |
+| EC5 | An agent skill describing when to call it | Done | `integrations/skill/SKILL.md` |
 | EC6 | A documented Python entry point | Partial | `clm_harness.loop.run` works but is not documented as public |
 | EC7 | Approval through a callback, not the keyboard | Missing | `--confirm` calls `input()`, which cannot work when another program is the caller |
 | EC8 | Hermes models as the model | Missing | Covered by MP4 |
+| EC9 | Native plug-in for Hermes Agent | Partial | `integrations/hermes/clm`. One short live session on one model worked. No long session, and nothing on a model that keeps its thinking |
+| EC10 | Native plug-in for opencode | Partial | `integrations/opencode/clm.ts`. One short live session on one model worked, with the cache intact before the edit. The hook it uses is experimental |
+| EC11 | Native support in Codex CLI | Missing | Blocked upstream: hooks cannot edit history |
 
 ### DC. Documentation and community
 

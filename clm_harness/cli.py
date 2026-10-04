@@ -133,7 +133,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     compactor = make_compactor(model.summarise) if cfg.mode == "baseline" else None
     progress = None if args.quiet else (lambda line: print(line, file=sys.stderr, flush=True))
     result = run(task, Path(args.dir), cfg, model, compactor=compactor, progress=progress)
-    print(result.answer)
+    if args.json:
+        print(json.dumps({"status": result.status, "answer": result.answer,
+                          "dollars": round(result.dollars, 4),
+                          "session_dir": str(result.session_dir)}, ensure_ascii=False))
+    else:
+        print(result.answer)
     if "authentication method" in result.answer:
         print("No Anthropic credential found. Put ANTHROPIC_API_KEY in the project's .env file "
               "(see .env.example) or in your environment, then retry.", file=sys.stderr)
@@ -267,6 +272,27 @@ def cmd_setup(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hostctx(args: argparse.Namespace) -> int:
+    """For plug-ins in other languages: one JSON request on stdin, one JSON reply on stdout."""
+    from .hostctx import run_json
+
+    try:
+        reply = run_json(json.loads(sys.stdin.read()))
+    except (ValueError, KeyError, TypeError) as e:
+        print(json.dumps({"error": f"{type(e).__name__}: {e}"}))
+        return 2
+    print(json.dumps(reply, ensure_ascii=False))
+    return 0
+
+
+def cmd_mcp(args: argparse.Namespace) -> int:
+    """Serve the Model Context Protocol on stdin and stdout until stdin closes."""
+    from .mcp import serve
+
+    serve(sys.stdin.buffer, sys.stdout.buffer)
+    return 0
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     from clm_harness.bench.run import report, run_matrix
 
@@ -314,6 +340,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--max-steps", type=int, help="commands the agent may run (default 64)")
     p.add_argument("--max-cost", type=float, help="stop the run at this many dollars (default 5)")
     p.add_argument("--quiet", action="store_true", help="no per-turn progress lines")
+    p.add_argument("--json", action="store_true",
+                   help="print one JSON object: status, answer, dollars, session_dir")
     p.add_argument("--confirm", action="store_true", help="approve each command first")
     p.add_argument("--allow-push", action="store_true", help="let the agent run `git push`")
     p.add_argument("--pass-env", action="append", metavar="NAME",
@@ -335,6 +363,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--key-stdin", action="store_true", help="read the key from standard input")
     p.add_argument("--offline", action="store_true", help="save the key without checking it")
     p.set_defaults(func=cmd_setup)
+
+    p = sub.add_parser("hostctx", help="for host-agent plug-ins: JSON in on stdin, JSON out")
+    p.set_defaults(func=cmd_hostctx)
+
+    p = sub.add_parser("mcp", help="run as an MCP server, so another agent can hand it tasks")
+    p.set_defaults(func=cmd_mcp)
 
     p = sub.add_parser("bench", help="run the benchmark matrix")
     p.add_argument("--tasks", default="kv,ledger")

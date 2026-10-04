@@ -68,6 +68,16 @@ Some tools the project needs may be missing from the default image. `--sandbox-i
 - **To disk.** Each run writes a full record to `<working folder>/.ctx/sessions/<id>/`: every reply, command and output, in plain text. Nothing there is deleted automatically. The folder contains its own ignore file, so git does not pick it up.
 - **Nowhere else.** The harness has no telemetry and makes no other network calls.
 
+## When another agent drives the harness
+
+`harness mcp` lets another agent start tasks. Each task runs shell commands and spends money, without you approving it in this harness.
+
+- The sandbox is on by default for these tasks. The calling agent can ask to turn it off; whether it may is up to the calling agent's own approval rules.
+- The calling agent sets a cost limit per task, capped at 2 dollars. `CLM_HARNESS_MCP_MAX_COST` changes the cap. There is no limit on the number of tasks.
+- The task text comes from the calling agent, so anything that agent was tricked into is passed on.
+
+The plug-ins for Hermes Agent and opencode run no commands and make no model calls of their own. They change what the host sends to its model, and keep their state, which includes text the model wrote, in the host's folder (`~/.hermes/clm/` or `.opencode/clm/`).
+
 ## Where your API key is kept
 
 `harness setup` writes the key as plain text to `.env` in your user settings folder: `~/.config/clm-harness/` on macOS and Linux, `%APPDATA%\clm-harness\` on Windows. On macOS and Linux the file is readable by your user only. It is not encrypted and not stored in the system keychain. The key is never passed to the agent's commands, and its value is redacted from command output.

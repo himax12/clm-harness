@@ -103,15 +103,34 @@ Do these in this order, on one day.
 ## 3. Release 0.3.0: reach and resilience
 
 - [ ] An OpenAI-compatible adapter: OpenAI and Codex models, OpenRouter, Ollama, Hermes models. [MP4, EC8]
-- [ ] A `--json` flag that prints status, answer, cost and session path. [EC2]
+- [x] A `--json` flag that prints status, answer, cost and session path. [EC2]
 - [ ] Approval through a callback in place of the keyboard prompt. [EC7, AR13]
-- [ ] An MCP server exposing one "run a task" tool, and a `SKILL.md` describing when to call it. [EC4, EC5]
+- [x] An MCP server exposing one "run a task" tool, and a `SKILL.md` describing when to call it. [EC4, EC5]
 - [ ] Document `run` as the public Python entry point. [EC6]
 - [ ] An executor interface, with host and Docker as its two implementations. [AR7]
 - [ ] Split the turn function into phases around a run-state object. [AR2]
 - [ ] Save run state each turn and add `harness resume`. [AR3]
 - [ ] A realistic coding-task evaluation on a small set of real bug fixes. [EV4]
 - [ ] Publish the sandbox image to GitHub's container registry. [PK8]
+
+## 3a. Other agents
+
+See `integrations/README.md`.
+
+- [x] A shared core for a host's own message list: one tool, edits kept as an overlay. [EC9, EC10]
+- [x] Hermes Agent context engine plug-in, checked through Hermes's real loader. [EC9]
+- [x] opencode plug-in, type-checked against opencode's types. [EC10]
+- [x] A weekly CI job that checks both plug-ins against their hosts' current releases.
+- [x] One live session in Hermes Agent with the plug-in. Done on `claude-haiku-4-5`: 3 cents. [EC9]
+- [x] One live session in opencode with the plug-in. Done on `claude-haiku-4-5`: 2 cents. [EC10]
+- [x] On those sessions, check prompt caching after an edit. In opencode the part before the edit was still read from cache; Hermes reports totals only. [MP6]
+- [ ] A long live session in each host, long enough for the size notices and the fallback to fire, counting refused edits. [MP8]
+- [ ] A live session in each host on a second model.
+- [ ] Check edits to earlier assistant messages on models that keep their thinking: it may be rejected.
+- [x] One live task handed over from Codex CLI through the MCP server. Done: 1 cent. [EC4]
+- [ ] Publish the opencode plug-in to npm.
+- [ ] Move the opencode plug-in to opencode's newer plug-in API once it is the default. [EC10]
+- [ ] Native Codex support, if its hooks gain the ability to replace history. [EC11]
 
 ## 4. Small items, any time
 

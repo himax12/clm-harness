@@ -1,0 +1,4 @@
+name: clm
+version: 0.1.0
+description: "Model-managed context: the agent lists, shortens, removes and restores blocks of its own context with the clm_context tool. Edits are an overlay; stored history is not changed. From clm-harness."
+author: himax12

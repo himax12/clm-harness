@@ -116,6 +116,7 @@ The agent works in `--dir`. Progress is printed one line per turn, and the final
 | `harness undo <session>` | Restore the context from before the last edit. |
 | `harness bench --ceiling <dollars>` | Run the benchmark (costs money). |
 | `harness report <results.csv>` | Summarise benchmark results. |
+| `harness mcp` | Run as an MCP server, so another agent can hand it tasks. |
 
 Useful flags for `run`:
 
@@ -145,6 +146,10 @@ The project appears at `/work` inside the container. A task that needs to downlo
 What commands see from inside the sandbox:
 
 ![Commands run inside the sandbox: Linux, only the project folder, an empty .env, no network](docs/media/sandbox.png)
+
+## Use it from other agents
+
+Hermes Agent and opencode can use model-managed context for their own sessions through a plug-in, and Codex CLI or any other agent can hand tasks to this harness through an MCP server. [integrations/README.md](integrations/README.md) has the setup for each. These are new: each has been tried once in a short live session.
 
 ## How it works
 
