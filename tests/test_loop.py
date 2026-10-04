@@ -1,8 +1,8 @@
 import json
 
-from harness.cli import main as cli
-from harness.config import Config
-from harness.loop import ModelReply, ScriptedModel, run, run_command
+from clm_harness.cli import main as cli
+from clm_harness.config import Config
+from clm_harness.loop import ModelReply, ScriptedModel, run, run_command
 
 # Replace the body of one block in "$CTX" with a short note, using perl (present in
 # Git Bash and on Linux). Prints nothing, so an accepted edit makes the turn free.
@@ -141,7 +141,7 @@ def test_step_limit(workdir):
 
 
 def test_cost_limit(workdir):
-    from harness.session import Usage
+    from clm_harness.session import Usage
 
     pricey = ModelReply(command="true", stop_reason="tool_use", usage=Usage(output=100_000))
     result = run("t", workdir, Config(max_cost_usd=3.0), ScriptedModel([pricey] * 10))

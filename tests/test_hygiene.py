@@ -6,12 +6,12 @@ from types import SimpleNamespace as NS
 
 import pytest
 
-from harness import cli as cli_module
-from harness.cli import main as cli
-from harness.config import Config, prices_for
-from harness.llm import parse_response
-from harness.loop import ModelReply, ScriptedModel, run, run_command
-from harness.session import Session, Usage
+from clm_harness import cli as cli_module
+from clm_harness.cli import main as cli
+from clm_harness.config import Config, prices_for
+from clm_harness.llm import parse_response
+from clm_harness.loop import ModelReply, ScriptedModel, run, run_command
+from clm_harness.session import Session, Usage
 
 
 def events(session_dir, kind=None):

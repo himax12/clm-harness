@@ -1,5 +1,7 @@
 # CLM harness: first iteration plan
 
+> Since version 0.1.0 the code lives in one package. Where this document says `harness/` it means `clm_harness/`, and `bench/` means `clm_harness/bench/`.
+
 A bash-only coding-agent harness on `claude-opus-5-5` in which the model manages its own context by editing a file (the Context Language Model idea, arXiv 2609.37725), plus one measured comparison against ordinary compaction.
 
 Implementation detail for every module (data structures, function signatures, algorithms, tests) is in `IMPLEMENTATION.md`, in the same phase order.

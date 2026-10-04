@@ -1,5 +1,5 @@
-from harness.budget import Estimator, Nudger, context_tokens, rollback
-from harness.config import Config
+from clm_harness.budget import Estimator, Nudger, context_tokens, rollback
+from clm_harness.config import Config
 
 from conftest import make_ctx
 

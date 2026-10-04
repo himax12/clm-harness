@@ -1,5 +1,5 @@
-from harness.config import Config
-from harness.shell import Shell, cap_to_room, format_observation, to_posix
+from clm_harness.config import Config
+from clm_harness.shell import Shell, cap_to_room, format_observation, to_posix
 
 
 def test_starts_in_workdir(shell, workdir):
@@ -157,7 +157,7 @@ def test_close_ends_background_jobs(workdir, session_dir):
 def test_large_finished_output_is_read_as_head_and_tail_only(tmp_path):
     # On the file directly: through a real command it depended on the command
     # finishing between two size checks, and failed on a busy machine.
-    from harness.shell import _read_capped
+    from clm_harness.shell import _read_capped
 
     path = tmp_path / "out.bin"
     path.write_bytes(b"START\n" + b"a" * 3_000_000 + b"\nEND\n")

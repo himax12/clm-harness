@@ -1,5 +1,7 @@
 # Implementation spec
 
+> Since version 0.1.0 the code lives in one package. Where this document says `harness/` it means `clm_harness/`, and `bench/` means `clm_harness/bench/`.
+
 How each part of the harness in `PLAN.md` is built: data structures, function signatures, algorithms and tests, in phase order. `PLAN.md` says what and why; this file says how.
 
 Conventions: Python 3.12+, standard library plus `anthropic` and `pytest`. Type hints throughout. No module imports `anthropic` except `llm.py` and `baseline.py`.

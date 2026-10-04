@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from harness.context import raw_tokens
+from clm_harness.context import raw_tokens
 
 READY = "READY_FOR_NEXT_OP"
 ALL_DELIVERED = "ALL OPERATIONS DELIVERED. Reply with DONE and no command."

@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from harness.budget import Estimator
-from harness.config import Config
-from harness.context import Context
-from harness.shell import Shell, find_bash
+from clm_harness.budget import Estimator
+from clm_harness.config import Config
+from clm_harness.context import Context
+from clm_harness.shell import Shell, find_bash
 
 
 def _has_bash() -> bool:
@@ -28,7 +28,7 @@ def pytest_collection_modifyitems(config, items):
 @pytest.fixture(autouse=True)
 def no_real_dotenv(monkeypatch):
     """Tests must never load the developer's real API key from the project's .env."""
-    monkeypatch.setattr("harness.cli.load_dotenv", lambda: [])
+    monkeypatch.setattr("clm_harness.cli.load_dotenv", lambda: [])
 
 
 @pytest.fixture

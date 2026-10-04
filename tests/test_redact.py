@@ -2,10 +2,10 @@ import json
 
 import pytest
 
-from harness.cli import main as cli
-from harness.config import Config
-from harness.loop import ModelReply, ScriptedModel, run, run_command
-from harness.redact import (REDACTED, Redactor, command_env, dotenv_files, is_secret_name,
+from clm_harness.cli import main as cli
+from clm_harness.config import Config
+from clm_harness.loop import ModelReply, ScriptedModel, run, run_command
+from clm_harness.redact import (REDACTED, Redactor, command_env, dotenv_files, is_secret_name,
                             removed_names, secret_values)
 
 
@@ -126,6 +126,6 @@ def test_doctor_offline_reports_shell_and_credential(workdir, monkeypatch, capsy
 def test_doctor_fails_without_a_credential(workdir, monkeypatch, capsys):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    monkeypatch.setattr("harness.cli.load_dotenv", lambda: [])
+    monkeypatch.setattr("clm_harness.cli.load_dotenv", lambda: [])
     assert cli(["doctor", "--offline", "--dir", str(workdir)]) == 1
     assert "FAIL  credential" in capsys.readouterr().out

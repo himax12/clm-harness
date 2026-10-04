@@ -2,7 +2,7 @@
 
 A bash-only coding-agent harness in which Claude manages its own context by editing a file (the Context Language Model idea, arXiv 2609.37725), plus a baseline compaction mode and a benchmark that compares the two.
 
-`PLAN.md` says what is being built and why. `IMPLEMENTATION.md` says how each module works and records every deviation and every finding from live runs. Read the relevant section before changing a module. `SAFETY.md` states what the harness protects against and what it does not; keep it true when you change `safety.py`, `redact.py`, `shell.py` or `sandbox.py`. `AUDIT.md` is the open-source readiness checklist; update an item's status when you fix it.
+`PLAN.md` says what is being built and why. `IMPLEMENTATION.md` says how each module works and records every deviation and every finding from live runs. Read the relevant section before changing a module. `SAFETY.md` states what the harness protects against and what it does not; keep it true when you change `safety.py`, `redact.py`, `shell.py` or `sandbox.py`. `AUDIT.md` is the open-source readiness checklist; update an item's status when you fix it. `LAUNCH.md` is the wider launch checklist (going public, packaging, visibility, other models and agents) and the architecture review; keep its statuses current the same way.
 
 ## Commands
 
@@ -26,7 +26,7 @@ uv run harness report <results.csv>
 ## Layout
 
 ```
-harness/
+clm_harness/
   config.py     every default, in one frozen dataclass; the price table
   shell.py      runs a command in Git Bash; state carry-over, timeout, truncation
   context.py    blocks, the context file format, edit validation, receipts
@@ -41,7 +41,7 @@ harness/
   sandbox.py    runs the commands in a Docker container (`--sandbox docker`)
   cli.py        the commands above
   prompts/      system.md, context.md, summarise.md
-bench/          key-value and ledger streams, driver, scorer, run matrix
+  bench/        key-value and ledger streams, driver, scorer, run matrix
 tests/          one file per module
 ```
 
@@ -49,7 +49,7 @@ Session data is written to `<workdir>/.ctx/sessions/<id>/` and benchmark output 
 
 ## Rules that are easy to break
 
-- **Never read, print or commit `.env`.** It holds the API key. The harness loads it itself. Commands the agent runs do not inherit secret-looking variables, and known secret values are redacted from command output before it is stored or sent (`harness/redact.py`); keep both in place.
+- **Never read, print or commit `.env`.** It holds the API key. The harness loads it itself. Commands the agent runs do not inherit secret-looking variables, and known secret values are redacted from command output before it is stored or sent (`clm_harness/redact.py`); keep both in place.
 - **Do not spend money without the user's say.** Run the benchmark only with an agreed `--ceiling`. Use `ScriptedModel` or a fake client for anything that can be tested without the API.
 - **Nothing in a request may change between turns unless the model changed it.** Prompt caching depends on the unedited prefix being byte-identical. In particular:
   - no request block may end in whitespace (the API trims the final block, so it would never match its own cache entry on the next turn);
@@ -68,7 +68,7 @@ Session data is written to `<workdir>/.ctx/sessions/<id>/` and benchmark output 
 
 ## Conventions
 
-- Python 3.12+, standard library plus `anthropic`; `pytest` for tests.
+- Python 3.10+, standard library plus `anthropic`; `pytest` for tests.
 - Write every file the shell will read with `newline="\n"`. Bash fails on CRLF.
 - The project path contains spaces. Quote paths in scripts, and refer to the context file as `"$CTX"`.
 - On Windows, `python3` may be a Store stub and native programs do not understand Git Bash paths such as `/tmp/x`. See `Shell.scripting_hint` and the Windows note in `load_system`.

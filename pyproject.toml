@@ -5,11 +5,12 @@ description = "A bash-only coding-agent harness in which the model manages its o
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = ["anthropic>=1.8,<2"]
 
 [project.scripts]
-harness = "harness.cli:main"
+harness = "clm_harness.cli:main"
+clm-harness = "clm_harness.cli:main"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
@@ -19,7 +20,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["harness", "bench"]
+packages = ["clm_harness"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -3,12 +3,12 @@ import json
 
 import pytest
 
-from bench import kv_store, ledger
-from bench.common import (ALL_DELIVERED, READY, Op, StreamDriver, check_sizing, extract_answers,
+from clm_harness.bench import kv_store, ledger
+from clm_harness.bench.common import (ALL_DELIVERED, READY, Op, StreamDriver, check_sizing, extract_answers,
                           score, sized_for, total_tokens)
-from bench.run import report, run_matrix
-from harness.config import Config
-from harness.loop import ModelReply
+from clm_harness.bench.run import report, run_matrix
+from clm_harness.config import Config
+from clm_harness.loop import ModelReply
 
 CFG = Config()
 

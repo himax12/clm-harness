@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: >-
+  If you use this software, please cite it, and cite the paper whose idea it
+  implements (listed under references).
+title: clm-harness
+type: software
+authors:
+  - name: himax12
+repository-code: https://github.com/himax12/clm-harness
+license: MIT
+version: 0.1.0
+abstract: >-
+  A bash-only coding-agent harness in which the model manages its own context by
+  editing a file. An independent implementation of the Context Language Models idea
+  for a hosted model.
+references:
+  - type: article
+    title: Context Language Models
+    authors:
+      - family-names: Shao
+        given-names: Rulin
+    notes: Rulin Shao and co-authors. The full author list is on the arXiv page.
+    year: 2026
+    url: https://arxiv.org/abs/2609.37725
+    identifiers:
+      - type: other
+        value: arXiv:2609.37725
+        description: arXiv identifier

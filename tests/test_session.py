@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from harness.config import Config
-from harness.context import apply_edit, parse, raw_tokens, render, render_block
-from harness.session import Session, Usage, undo
+from clm_harness.config import Config
+from clm_harness.context import apply_edit, parse, raw_tokens, render, render_block
+from clm_harness.session import Session, Usage, undo
 
 from conftest import make_ctx
 
