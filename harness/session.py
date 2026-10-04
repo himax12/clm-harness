@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .config import PRICES, Config
+from .config import Config, prices_for
 from .context import Block, parse, render_blocks
 
 
@@ -21,12 +21,14 @@ class Usage:
     def prompt_total(self) -> int:
         return self.input + self.cache_read + self.cache_write
 
-    def cost(self) -> float:
+    def cost(self, model: str | None = None) -> float:
+        """Dollars at the given model's prices (the default model's when none is given)."""
+        prices, _ = prices_for(model)
         return (
-            self.input * PRICES["input"]
-            + self.output * PRICES["output"]
-            + self.cache_read * PRICES["cache_read"]
-            + self.cache_write * PRICES["cache_write"]
+            self.input * prices["input"]
+            + self.output * prices["output"]
+            + self.cache_read * prices["cache_read"]
+            + self.cache_write * prices["cache_write"]
         ) / 1_000_000
 
     def add(self, other: "Usage") -> None:
@@ -52,15 +54,26 @@ class Session:
     def __init__(self, workdir: Path, cfg: Config):
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
         self.id = f"{stamp}-{secrets.token_hex(2)}"
-        self.dir = Path(workdir) / ".ctx" / "sessions" / self.id
+        root = Path(workdir) / ".ctx"
+        self.dir = root / "sessions" / self.id
         for sub in ("blocks", "outputs", "snapshots", "state"):
             (self.dir / sub).mkdir(parents=True, exist_ok=True)
+        # Transcripts hold everything the agent read. Keep them out of the user's repo
+        # without asking the user to edit their own ignore file.
+        ignore = root / ".gitignore"
+        if not ignore.exists():
+            ignore.write_text("*\n", encoding="utf-8", newline="\n")
         self.ctx_path = self.dir / "LIVE_CTX.md"
         self.transcript = self.dir / "transcript.jsonl"
+        self.model = cfg.model
         self.usage = Usage()
+        self.dollars = 0.0
+        self.price_estimated = False  # a turn was served by a model with no price table
+        self.turn = 0
         self.stats: dict[str, int] = {}
 
     def event(self, type: str, turn: int, **fields) -> None:
+        self.turn = max(self.turn, turn)
         _append_event(self.transcript, type, turn, fields)
 
     def bump(self, name: str, n: int = 1) -> None:
@@ -77,13 +90,19 @@ class Session:
         data = {"turn": turn, "blocks": [asdict(b) for b in blocks_before]}
         path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8", newline="\n")
 
-    def add_usage(self, usage: Usage) -> None:
+    def add_usage(self, usage: Usage, served_by: str = "") -> None:
+        """Charge a call at the prices of the model that actually served it."""
+        model = served_by or self.model
+        _, known = prices_for(model)
+        self.price_estimated = self.price_estimated or not known
         self.usage.add(usage)
+        self.dollars += usage.cost(model)
 
     def write_usage(self, status: str) -> None:
         data = {
             "status": status,
-            "dollars": round(self.usage.cost(), 6),
+            "dollars": round(self.dollars, 6),
+            "price_estimated": self.price_estimated,
             "tokens": asdict(self.usage),
             **self.stats,
         }

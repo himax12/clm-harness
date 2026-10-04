@@ -221,7 +221,7 @@ class Nudger:
 ```
 
 1. Re-arm: remove from `fired` any tier the context is now below.
-2. Urgent: `need = min(max(0.10 * limit, 2 * max(recent_outputs[-3:], default=0)), 0.50 * limit)`. If `limit - tokens < need`, return the urgent text. Fires every turn while true.
+2. Urgent: `need = min(max(0.10 * limit, 2 * max(recent_outputs[-3:], default=0)), 0.30 * limit)`. If `limit - tokens < need`, return the urgent text. Fires every turn while true.
 3. Otherwise the highest tier in `cfg.nudge_tiers` that is crossed and not yet fired; mark it and all lower tiers fired.
 4. At most one notice per turn.
 
@@ -622,3 +622,22 @@ Made while building Phases 2 and 3:
 - Benchmark runs use `max_steps=400` and a one-hour wall clock, since a stream has 47 to 91 operations.
 - `harness report <csv>` prints the per-task, per-mode summary; `bench/report.py` was folded into `bench/run.py`.
 - The summarise call in baseline mode goes through `ClaudeModel.summarise`, injected into the compactor, so `baseline.py` does not import the SDK.
+
+Found by the first live runs (3 October 2026):
+
+- **No request block may end in whitespace.** The API trims trailing whitespace from the final block, so a block ending in a newline never matched its own cache entry once it became a middle block. Measured on a three-call test: with trailing newlines the second and third calls read only the task from cache; with separators moved to the start of each block they read everything from the previous call. `build_content` now puts separators at the start of blocks.
+- **With that fixed, the 20-block lookback works**, so after an edit the request reads the cache up to the last turn boundary before the edited block. The fixed anchors are kept but only matter beyond 20 blocks.
+- **The token estimate has a fixed overhead and a ratio.** The first response sets the overhead (tool definitions the local estimate cannot see, about 800 tokens); later responses set the density ratio. With both, the estimate was within about 2% of the API's count through a 23-turn run. A single multiplier started at 2.1 and would have overstated large contexts.
+- **The agent's commands do not inherit `ANTHROPIC_*` variables**, so the model cannot read the key the harness runs on.
+- **Heredoc bodies written to a file are not scanned by the blocked-command check.** The model's notes about `safety.py` mentioned `mkfs` and were refused. Bodies fed to a shell (`bash <<EOF`) are still scanned.
+- **The urgent notice demands at most 30% of the limit as free room** (was 50%). At 50% it fired at 56% full.
+- **On Windows the system prompt warns about path translation.** The model wrote notes to `/tmp` from bash and then could not open them from native Python.
+
+Found while working through `AUDIT.md` (3 and 4 October 2026):
+
+- **Command output goes to a file, not a pipe.** With a pipe, a background job held the turn open until it exited, and large output was buffered whole in memory. The harness now waits on bash alone and polls the file's size, killing a command that passes `max_output_bytes`.
+- **On Windows, `taskkill /T` does not kill what Git Bash starts.** A timed-out `yes` kept running and three such orphans wrote 77 GB to the temp folder before the disk filled. Each command now starts suspended, is placed in its own job object, and is then resumed; a timeout or the output cap ends the whole job, and `Shell.close()` ends every job at the end of the run. The earlier timeout test only checked that the call returned, which is why it passed.
+- **`run` is split in two.** `run` owns the session's lifetime and always writes the `finish` event and `usage.json`, including on Ctrl+C or a harness error; `_turns` holds the loop.
+- **Cost is charged per call at the serving model's prices** (`Session.add_usage(usage, served_by)`), so a turn served by a fallback model is priced correctly. An unknown model is priced as Opus 5.5 and flagged as `price_estimated`.
+- **Secret handling is in `redact.py`.** Variables with secret-looking names are removed from the agent's environment; their values, `.env` values and common key formats are replaced in command output before it reaches the context, the transcript or a saved file.
+- **A repeated-command check was considered and left out.** In the stream benchmark the same command legitimately runs once per operation, so a naive "three identical commands" rule would fire constantly.

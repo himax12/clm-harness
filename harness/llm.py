@@ -31,14 +31,21 @@ def build_content(ctx: Context) -> list[dict]:
 
     One text block per context block, so that an edit only invalidates the prompt
     cache from the edited block onward.
+
+    Separators go at the START of each block and no block ends in whitespace. The API
+    trims trailing whitespace from the final block, so a block ending in a newline
+    hashes differently as the last block than as a middle block on the next turn, and
+    the previous turn's cache entry is never found. (Measured: with trailing newlines,
+    every turn re-wrote everything after the task.)
     """
-    content = [{"type": "text", "text": f"TASK\n{ctx.pinned}\n\n", "cache_control": EPHEMERAL}]
+    content = [{"type": "text", "text": f"TASK\n{ctx.pinned.strip()}", "cache_control": EPHEMERAL}]
     if ctx.rollback_note:
-        content.append({"type": "text", "text": ctx.rollback_note + "\n\n"})
-    content.append({"type": "text", "text": FIRST_LINE + "\n"})
+        content.append({"type": "text", "text": "\n\n" + ctx.rollback_note.strip()})
+    content.append({"type": "text", "text": "\n\n" + FIRST_LINE})
     start = len(content)
     for b in ctx.blocks:
-        content.append({"type": "text", "text": render_block(b) + "\n\n"})
+        sep = "\n" if len(content) == start else "\n\n"
+        content.append({"type": "text", "text": sep + render_block(b).rstrip()})
     for i in anchor_indices(len(ctx.blocks)):
         content[start + i]["cache_control"] = EPHEMERAL
     return content
@@ -76,12 +83,18 @@ def parse_response(response) -> ModelReply:
     )
     if reply.stop_reason == "stop_sequence":
         reply.stop_reason = "end_turn"
+    if reply.stop_reason == "refusal":
+        details = getattr(response, "stop_details", None)
+        parts = [getattr(details, "category", None), getattr(details, "explanation", None)]
+        reply.refusal = ": ".join(str(p) for p in parts if p) or "no category given"
+    reply.dropped_calls = max(0, len(tool_uses) - 1)
     if tool_uses and reply.stop_reason in ("tool_use", "max_tokens"):
         args = tool_uses[0].input  # only the first call; the mirror is rewritten between commands
+        command = args.get("command") if isinstance(args, dict) else None
         if isinstance(args, dict) and args.get("restart") is True:
             reply.restart = True
-        elif isinstance(args, dict) and isinstance(args.get("command"), str) and args["command"].strip():
-            reply.command = args["command"]
+        elif isinstance(command, str) and command.strip():
+            reply.command = command
         elif reply.stop_reason == "tool_use":
             reply.stop_reason = "invalid_tool"
     return reply

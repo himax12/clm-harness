@@ -9,14 +9,16 @@ from pathlib import Path
 
 from .budget import Estimator
 from .config import Config
+from .redact import command_env
 
 
 @dataclass
 class CommandResult:
     output: str  # stdout and stderr merged
-    exit_code: int  # -1 on timeout
+    exit_code: int  # -1 when the harness killed it
     timed_out: bool
     seconds: float
+    output_limit: bool = False  # killed for printing too much
 
 
 def find_bash() -> str:
@@ -67,6 +69,8 @@ class Shell:
         self.state.mkdir(parents=True, exist_ok=True)
         self.run_sh = self.state / "run.sh"
         self.user_sh = self.state / "user_cmd.sh"
+        self._runs = 0
+        self._jobs: list[int] = []  # Windows job handles, one per command
         state = _q(to_posix(self.state))
         _write(
             self.run_sh,
@@ -110,42 +114,78 @@ class Shell:
         _write(self.user_sh, command + "\n")
         started = time.monotonic()
         kwargs: dict = {}
+        job = _new_job()
         if os.name == "nt":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            # Start suspended so the process is inside its job before it can spawn anything.
+            suspended = _CREATE_SUSPENDED if job else 0
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | suspended
         else:
             kwargs["start_new_session"] = True
-        proc = subprocess.Popen(
-            [self.bash, self.run_sh.as_posix()],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.DEVNULL,
-            **kwargs,
-        )
-        timed_out = False
-        try:
-            out, _ = proc.communicate(timeout=self.cfg.command_timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            self._kill_tree(proc)
+        # Output goes to a file, not a pipe. With a pipe, a background job (`server &`)
+        # keeps the pipe open and the turn hangs until the job exits; and a command that
+        # prints gigabytes is buffered whole in memory. A file lets us wait on bash alone
+        # and watch the size while it runs.
+        self._runs += 1
+        sink_path = self.state / f"out-{self._runs}.bin"
+        deadline = started + self.cfg.command_timeout
+        timed_out = too_big = False
+        with open(sink_path, "wb") as sink:
+            proc = subprocess.Popen(
+                [self.bash, self.run_sh.as_posix()],
+                stdout=sink,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL,
+                env=command_env(self.cfg.env_passthrough),
+                **kwargs,
+            )
+            if job:
+                job = _adopt(job, proc)
+            if job:
+                self._jobs.append(job)
+            while True:
+                try:
+                    proc.wait(timeout=0.2)
+                    break
+                except subprocess.TimeoutExpired:
+                    if time.monotonic() >= deadline:
+                        timed_out = True
+                    elif sink_path.stat().st_size > self.cfg.max_output_bytes:
+                        too_big = True
+                    else:
+                        continue
+                    self._kill_tree(proc, job)
+                    try:
+                        proc.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    break
+        raw = _read_capped(sink_path, self.cfg.max_output_bytes)
+        for _ in range(20):  # a killed process can take a moment to release the file
             try:
-                out, _ = proc.communicate(timeout=10)
-            except subprocess.TimeoutExpired:
-                out = b""
-        text = (out or b"").decode("utf-8", errors="replace").replace("\r\n", "\n")
+                sink_path.unlink()
+                break
+            except OSError:
+                if not (timed_out or too_big):
+                    break  # a background job still holds it open; that is allowed
+                time.sleep(0.1)
+        text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n")
+        killed = timed_out or too_big
         return CommandResult(
             output=text,
-            exit_code=-1 if timed_out else proc.returncode,
+            exit_code=-1 if killed else proc.returncode,
             timed_out=timed_out,
             seconds=time.monotonic() - started,
+            output_limit=too_big,
         )
 
     @staticmethod
-    def _kill_tree(proc: subprocess.Popen) -> None:
+    def _kill_tree(proc: subprocess.Popen, job: int | None = None) -> None:
+        """Kill a command and everything it started."""
         if os.name == "nt":
-            subprocess.run(
-                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
-                capture_output=True,
-            )
+            if job:
+                _kernel32.TerminateJobObject(job, 1)
+            # Also by parent link, for the rare case the job could not be set up.
+            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True)
         else:
             import signal
 
@@ -153,6 +193,69 @@ class Shell:
                 os.killpg(proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+
+    def close(self) -> None:
+        """End every process any command started, including background jobs.
+
+        Windows only: there each command runs in its own job object. On POSIX a
+        background job that outlives its command is left running.
+        """
+        for job in self._jobs:
+            _kernel32.TerminateJobObject(job, 1)
+            _kernel32.CloseHandle(job)
+        self._jobs.clear()
+
+
+# On Windows, killing a process by its parent link (taskkill /T) does not reliably reach
+# the children Git Bash starts: a command like `yes` survived its own timeout and kept
+# writing to disk. A job object contains every descendant, whatever its parent link, and
+# TerminateJobObject ends them all.
+_CREATE_SUSPENDED = 0x00000004
+if os.name == "nt":
+    import ctypes
+    from ctypes import wintypes
+
+    _kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    _ntdll = ctypes.WinDLL("ntdll")
+    _kernel32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    _kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+    _kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    _kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+    _kernel32.TerminateJobObject.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    _kernel32.TerminateJobObject.restype = wintypes.BOOL
+    _kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    _kernel32.CloseHandle.restype = wintypes.BOOL
+    _ntdll.NtResumeProcess.argtypes = [wintypes.HANDLE]
+
+
+def _new_job() -> int | None:
+    if os.name != "nt":
+        return None
+    return _kernel32.CreateJobObjectW(None, None) or None
+
+
+def _adopt(job: int, proc: subprocess.Popen) -> int | None:
+    """Put a suspended process into the job, then let it run. Returns the job, or None
+    if the process could not be put in it."""
+    handle = int(proc._handle)
+    ok = _kernel32.AssignProcessToJobObject(job, handle)
+    _ntdll.NtResumeProcess(handle)
+    if not ok:
+        _kernel32.CloseHandle(job)
+        return None
+    return job
+
+
+def _read_capped(path: Path, cap: int) -> bytes:
+    """Read a command's output, keeping at most `cap` bytes: the start and the end."""
+    size = path.stat().st_size
+    with open(path, "rb") as f:
+        if size <= cap:
+            return f.read()
+        head = f.read(cap // 2)
+        f.seek(size - cap // 2)
+        tail = f.read()
+    return head + f"\n... [{size - cap:,} bytes omitted by the harness] ...\n".encode() + tail
 
 
 def _elide(text: str, head: int, tail: int, pointer: str) -> str:
@@ -176,6 +279,9 @@ def format_observation(result: CommandResult, name: str, outputs_dir: Path, cfg:
         text = _elide(text, cfg.head_chars, cfg.tail_chars, f'"$CTX_DIR"/outputs/{name}.txt')
     if result.timed_out:
         text += f"\n(timed out after {cfg.command_timeout} s; partial output shown)"
+    if result.output_limit:
+        text += (f"\n(killed: output passed {cfg.max_output_bytes // 1_000_000} MB; "
+                 "partial output shown. Print less, or redirect to a file.)")
     return f"{text}\n(exit_code={result.exit_code})"
 
 

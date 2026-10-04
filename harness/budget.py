@@ -7,10 +7,19 @@ from .context import Block, Context, raw_tokens, render_block
 
 
 class Estimator:
-    """Characters / 4, scaled by a ratio calibrated against the API's own count."""
+    """Characters / 4, corrected against the API's own count.
+
+    The correction has two parts. `overhead` is the fixed cost the local estimate
+    cannot see (tool definitions and the tool-use preamble), taken from the first
+    response. `ratio` is how much denser the real tokenizer is than characters / 4,
+    updated from every later response. A single multiplier would badly overstate
+    large contexts, because on a small first request the fixed cost dominates.
+    """
 
     def __init__(self) -> None:
         self.ratio = 1.0
+        self.overhead = 0
+        self._calibrated = False
 
     def scale(self, raw: int) -> int:
         return math.ceil(raw * self.ratio)
@@ -18,10 +27,17 @@ class Estimator:
     def tokens(self, text: str) -> int:
         return self.scale(raw_tokens(text))
 
+    def total(self, raw_request: int) -> int:
+        return self.scale(raw_request) + self.overhead
+
     def calibrate(self, api_prompt_total: int, raw_request: int) -> None:
         if api_prompt_total <= 0 or raw_request <= 0:
             return
-        self.ratio = min(3.0, max(0.5, api_prompt_total / raw_request))
+        if not self._calibrated:
+            self.overhead = max(0, api_prompt_total - raw_request)
+            self._calibrated = True
+            return
+        self.ratio = min(3.0, max(0.5, (api_prompt_total - self.overhead) / raw_request))
 
 
 def raw_context(ctx: Context, system: str, blocks: list[Block] | None = None) -> int:
@@ -38,7 +54,7 @@ def context_tokens(
     ctx: Context, system: str, est: Estimator, blocks: list[Block] | None = None
 ) -> int:
     """Calibrated size of the whole request: system, pinned task, note and blocks."""
-    return est.scale(raw_context(ctx, system, blocks))
+    return est.total(raw_context(ctx, system, blocks))
 
 
 _TIER_TEXT = {
@@ -66,7 +82,7 @@ class Nudger:
         # Re-arm any tier the context has dropped back below.
         self.fired = {t for t in self.fired if tokens >= t * limit}
 
-        need = min(max(0.10 * limit, 2 * max(recent_outputs[-3:], default=0)), 0.50 * limit)
+        need = min(max(0.10 * limit, 2 * max(recent_outputs[-3:], default=0)), 0.30 * limit)
         if limit - tokens < need:
             return (
                 f"Context is at {tokens:,} / {limit:,} tokens and about to overflow. "

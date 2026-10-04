@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from .env import load_dotenv
+from .redact import dotenv_files
 from .session import undo
 
 
@@ -41,7 +42,9 @@ def cmd_log(args: argparse.Namespace) -> int:
         elif kind == "notice":
             print(f"      notice: {e['text'][:80]}")
         elif kind == "finish":
-            print(f"finished: {e['status']}")
+            failed = e["status"] != "finished" and e.get("answer")
+            detail = f" ({e['answer']})" if failed else ""
+            print(f"finished: {e['status']}{detail}")
     return 0
 
 
@@ -59,32 +62,129 @@ def _claude(cfg):
 
 def cmd_run(args: argparse.Namespace) -> int:
     from .baseline import make_compactor
-    from .config import Config
+    from .config import TESTED_MODELS, Config, prices_for
     from .loop import run
 
-    overrides = {"mode": args.mode, "confirm": args.confirm}
-    if args.budget:
-        overrides["budget_tokens"] = args.budget
-    if args.max_steps:
-        overrides["max_steps"] = args.max_steps
-    if args.max_cost:
-        overrides["max_cost_usd"] = args.max_cost
-    cfg = Config(**overrides)
+    if args.task_file:
+        task = (sys.stdin.read() if args.task_file == "-"
+                else Path(args.task_file).read_text(encoding="utf-8")).strip()
+    else:
+        task = (args.task or "").strip()
+    if not task:
+        print("no task given: pass it as an argument, or use --task-file PATH (or - for stdin)",
+              file=sys.stderr)
+        return 2
+
+    overrides = {"mode": args.mode, "confirm": args.confirm, "allow_push": args.allow_push,
+                 "env_passthrough": tuple(args.pass_env or ())}
+    for flag, field in (("budget", "budget_tokens"), ("max_steps", "max_steps"),
+                        ("max_cost", "max_cost_usd"), ("model", "model"), ("effort", "effort"),
+                        ("timeout", "command_timeout")):
+        if getattr(args, flag) is not None:
+            overrides[field] = getattr(args, flag)
+    try:
+        cfg = Config(**overrides)
+    except ValueError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if cfg.model not in TESTED_MODELS:
+        known = prices_for(cfg.model)[1]
+        print(f"warning: {cfg.model} is untested; the request was built for "
+              f"{', '.join(TESTED_MODELS)} and may be rejected."
+              + ("" if known else " Its prices are unknown, so costs are shown at Opus 5.5 rates."),
+              file=sys.stderr)
     try:
         model = _claude(cfg)
     except Exception as e:
         print(f"could not create the Claude client: {e}", file=sys.stderr)
         print("Set ANTHROPIC_API_KEY and retry.", file=sys.stderr)
         return 2
+    for path in dotenv_files(Path(args.dir)):
+        print(f"warning: {path} holds secrets the agent could read. Its values are redacted "
+              "from command output, but a command can still open the file. Use --confirm, or "
+              "work in a folder without it.", file=sys.stderr)
     compactor = make_compactor(model.summarise) if cfg.mode == "baseline" else None
-    result = run(args.task, Path(args.dir), cfg, model, compactor=compactor)
+    progress = None if args.quiet else (lambda line: print(line, file=sys.stderr, flush=True))
+    result = run(task, Path(args.dir), cfg, model, compactor=compactor, progress=progress)
     print(result.answer)
     if "authentication method" in result.answer:
         print("No Anthropic credential found. Put ANTHROPIC_API_KEY in the project's .env file "
               "(see .env.example) or in your environment, then retry.", file=sys.stderr)
-    print(f"[{result.status}] ${result.usage.cost():.4f}  session: {result.session_dir}",
+    print(f"[{result.status}] ${result.dollars:.4f}  session: {result.session_dir}",
           file=sys.stderr)
     return 0 if result.status == "finished" else 1
+
+
+def cmd_sessions(args: argparse.Namespace) -> int:
+    root = Path(args.dir) / ".ctx" / "sessions"
+    dirs = sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
+    if not dirs:
+        print(f"no sessions under {root}")
+        return 0
+    for d in dirs:
+        status, dollars, task = "unfinished", "", ""
+        usage = d / "usage.json"
+        if usage.exists():
+            data = json.loads(usage.read_text(encoding="utf-8"))
+            status, dollars = data.get("status", "?"), f"${data.get('dollars', 0):.2f}"
+        transcript = d / "transcript.jsonl"
+        if transcript.exists():
+            with transcript.open(encoding="utf-8") as f:
+                first = f.readline()
+            if first:
+                task = " ".join(json.loads(first).get("task", "").split())[:60]
+        print(f"{d.name}  {status:<17} {dollars:>7}  {task}")
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Check that a run can start: shell, scripting tool, credential. Spends nothing."""
+    import os
+    import tempfile
+
+    from .config import Config
+    from .redact import removed_names
+    from .shell import Shell, find_bash
+
+    ok = True
+
+    def report(good: bool, label: str, detail: str) -> None:
+        nonlocal ok
+        ok = ok and good
+        print(f"{'ok  ' if good else 'FAIL'}  {label}: {detail}")
+
+    cfg = Config()
+    report(sys.version_info >= (3, 12), "python", sys.version.split()[0])
+    try:
+        bash = find_bash()
+        report(True, "bash", bash)
+        with tempfile.TemporaryDirectory() as tmp:
+            hint = Shell(Path(tmp), Path(tmp) / "session", cfg).scripting_hint()
+        report(True, "scripting tool for context edits", hint.replace("`", ""))
+    except Exception as e:
+        report(False, "bash", str(e))
+
+    source = next((n for n in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN") if os.environ.get(n)),
+                  None)
+    report(source is not None, "credential", f"found in {source}" if source
+           else "not set; put ANTHROPIC_API_KEY in .env (see .env.example)")
+    if source and not args.offline:
+        try:
+            import anthropic
+
+            # Token counting validates the key and the model id and costs nothing.
+            anthropic.Anthropic().messages.count_tokens(
+                model=cfg.model, messages=[{"role": "user", "content": "ping"}])
+            report(True, "API", f"key accepted; model {cfg.model} available")
+        except Exception as e:
+            report(False, "API", f"{type(e).__name__}: {str(e)[:160]}")
+
+    removed = removed_names()
+    print(f"info  {len(removed)} secret-looking environment variables are hidden from the "
+          "agent's commands" + (f": {', '.join(removed)}" if removed else ""))
+    for path in dotenv_files(Path(args.dir)):
+        print(f"warn  {path} is readable by the agent if you run it in this folder")
+    return 0 if ok else 1
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
@@ -115,15 +215,35 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("run", help="run a task with Claude")
-    p.add_argument("task")
+    p = sub.add_parser(
+        "run", help="run a task with Claude",
+        epilog="The agent runs shell commands unattended with your permissions. A short list "
+               "of destructive commands is refused, but this is not a sandbox. Read SAFETY.md "
+               "before pointing it at anything you care about.",
+    )
+    p.add_argument("task", nargs="?", help="what to do (or use --task-file)")
+    p.add_argument("--task-file", metavar="PATH", help="read the task from a file, or - for stdin")
     p.add_argument("--dir", default=".", help="directory to work in")
-    p.add_argument("--mode", choices=("clm", "baseline"), default="clm")
+    p.add_argument("--mode", choices=("clm", "baseline"), default="clm",
+                   help="clm: the model edits its own context; baseline: ordinary compaction")
+    p.add_argument("--model", help="model id (default claude-opus-5-5, the only one tested)")
+    p.add_argument("--effort", choices=("low", "medium", "high", "xhigh", "max"),
+                   help="reasoning effort (default medium)")
     p.add_argument("--budget", type=int, help="context budget in tokens (default 32000)")
-    p.add_argument("--max-steps", type=int)
-    p.add_argument("--max-cost", type=float, help="stop the run at this many dollars")
+    p.add_argument("--timeout", type=int, help="seconds before a command is killed (default 120)")
+    p.add_argument("--max-steps", type=int, help="commands the agent may run (default 64)")
+    p.add_argument("--max-cost", type=float, help="stop the run at this many dollars (default 5)")
+    p.add_argument("--quiet", action="store_true", help="no per-turn progress lines")
     p.add_argument("--confirm", action="store_true", help="approve each command first")
+    p.add_argument("--allow-push", action="store_true", help="let the agent run `git push`")
+    p.add_argument("--pass-env", action="append", metavar="NAME",
+                   help="let the agent's commands see this secret-looking variable (repeatable)")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("doctor", help="check the shell and the API credential; spends nothing")
+    p.add_argument("--dir", default=".", help="folder you intend to run in")
+    p.add_argument("--offline", action="store_true", help="skip the API check")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("bench", help="run the benchmark matrix")
     p.add_argument("--tasks", default="kv,ledger")
@@ -141,6 +261,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("csv")
     p.set_defaults(func=cmd_report)
 
+    p = sub.add_parser("sessions", help="list the sessions recorded in a folder")
+    p.add_argument("--dir", default=".")
+    p.set_defaults(func=cmd_sessions)
+
     p = sub.add_parser("log", help="print a turn-by-turn summary of a session")
     p.add_argument("session")
     p.add_argument("--dir", default=".")
@@ -152,6 +276,9 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_undo)
 
     args = parser.parse_args(argv)
+    for stream in (sys.stdout, sys.stderr):  # the model's answers are not always cp1252
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     load_dotenv()
     return args.func(args)
 

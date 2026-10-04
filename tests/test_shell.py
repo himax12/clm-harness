@@ -92,3 +92,81 @@ def test_cap_to_room_cuts_and_saves(session_dir, est):
 def test_cap_to_room_leaves_fitting_text_alone(session_dir, est):
     assert cap_to_room("short", 500, est, "turn-0003", session_dir / "outputs") == "short"
     assert not (session_dir / "outputs" / "turn-0003.txt").exists()
+
+
+def test_background_job_does_not_hold_up_the_turn(shell):
+    result = shell.run("sleep 6 & echo started")
+    assert result.output.strip() == "started" and result.exit_code == 0
+    assert result.seconds < 4  # with a pipe this waited for the sleep to finish
+
+
+def test_background_job_keeps_running_for_the_next_command(shell):
+    shell.run("(sleep 1; echo done > marker.txt) &")
+    assert "done" in shell.run("sleep 3; cat marker.txt").output
+
+
+# The commands in the next tests are bounded on purpose. An earlier version used `yes`,
+# the kill did not reach it on Windows, and three orphans wrote 77 GB to the temp folder.
+HEARTBEAT = "while true; do date +%s%N > beat.txt; sleep 0.2; done"
+BOUNDED_FLOOD = "for i in $(seq 1 400); do head -c 100000 /dev/zero | tr '\\0' 'a'; done"  # 40 MB
+
+
+def _beats_stopped(workdir) -> bool:
+    import time
+
+    time.sleep(0.6)
+    first = (workdir / "beat.txt").read_text()
+    time.sleep(1.2)
+    return (workdir / "beat.txt").read_text() == first
+
+
+def test_timeout_kills_every_process_the_command_started(workdir, session_dir):
+    shell = Shell(workdir, session_dir, Config(command_timeout=2))
+    result = shell.run(f"({HEARTBEAT}) & {HEARTBEAT}")
+    assert result.timed_out
+    assert _beats_stopped(workdir)  # both loops are dead, not orphaned
+
+
+def test_runaway_output_is_killed(workdir, session_dir):
+    shell = Shell(workdir, session_dir, Config(command_timeout=60, max_output_bytes=200_000))
+    result = shell.run(BOUNDED_FLOOD)
+    assert result.output_limit and result.exit_code == -1 and not result.timed_out
+    assert result.seconds < 30
+    # The output file could be deleted, so nothing still has it open for writing.
+    assert not list(shell.state.glob("out-*.bin"))
+    text = format_observation(result, "turn-0001", session_dir / "outputs", shell.cfg)
+    assert "killed: output passed" in text
+
+
+def test_close_ends_background_jobs(workdir, session_dir):
+    import os
+
+    shell = Shell(workdir, session_dir, Config(command_timeout=20))
+    shell.run(f"({HEARTBEAT}) &")
+    assert "alive" in shell.run("sleep 1; test -s beat.txt && echo alive").output
+    if os.name != "nt":
+        shell.run("pkill -f beat.txt || true")  # POSIX has no per-command job to close
+        return
+    shell.close()
+    assert _beats_stopped(workdir)
+
+
+def test_large_finished_output_is_read_as_head_and_tail_only(workdir, session_dir):
+    shell = Shell(workdir, session_dir, Config(max_output_bytes=100_000))
+    result = shell.run("echo START; head -c 3000000 /dev/zero | tr '\\0' 'a'; echo; echo END")
+    assert len(result.output) < 110_000  # never the full 3 MB in memory
+    assert result.output.startswith("START") and result.output.rstrip().endswith("END")
+    assert "bytes omitted by the harness" in result.output
+
+
+def test_output_files_are_cleaned_up(shell):
+    shell.run("echo one")
+    shell.run("echo two")
+    assert not list(shell.state.glob("out-*.bin"))
+
+
+def test_api_credentials_are_not_visible_to_commands(shell, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-secret")
+    monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "tok-secret")
+    out = shell.run('echo "[$ANTHROPIC_API_KEY][$ANTHROPIC_AUTH_TOKEN]"; env | grep -ci anthropic').output
+    assert out.splitlines() == ["[][]", "0"]

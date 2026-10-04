@@ -71,7 +71,8 @@ def maybe_compact(
         at = ctx.blocks.index(head[0])
         gone = {b.id for b in head}
         ctx.blocks = [b for b in ctx.blocks if b.id not in gone]
-        note = ctx.add("note", f"[Summary of earlier work]\n{summary.strip() or '(no summary available)'}")
+        text = summary.strip() or "(no summary available)"
+        note = ctx.add("note", f"[Summary of earlier work]\n{text}")
         ctx.blocks.insert(at, ctx.blocks.pop())
         session.save_block(note)
         log("summarise", before)
