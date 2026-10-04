@@ -8,10 +8,12 @@ A bash-only coding-agent harness in which Claude manages its own context by edit
 
 ```
 uv sync                         install
-uv run pytest -q                all tests (about 45 s; shell tests run real Git Bash)
+uv run pytest -q                all tests (about 50 s; shell tests run real bash commands)
 uv run pytest tests/test_context.py -q
+uv run ruff check .             lint (also run in CI)
 uv run harness doctor           check the shell and the API credential; spends nothing
 uv run harness run "<task>" --dir <folder> [--mode clm|baseline] [--budget N] [--max-cost D]
+uv run harness sessions --dir <folder>
 uv run harness log <session-dir>
 uv run harness undo <session-dir>
 uv run harness bench --ceiling <dollars> [--tasks kv,ledger] [--modes clm,baseline] [--seeds 1,2,3]
@@ -56,6 +58,8 @@ Session data is written to `<workdir>/.ctx/sessions/<id>/` and benchmark output 
 - **An edit is applied whole or refused whole.** `apply_edit` must not mutate the context before its last step.
 - **Never delete history.** The transcript, block originals and snapshots are append-only or write-once.
 - **`user` blocks are protected; `input` blocks are not.** The model may edit task input fed by a driver, and rollback may drop neither.
+- **A test that starts a process must be bounded.** It has to end by itself within seconds even if the harness fails to kill it. Never use an endless generator such as `yes`: an earlier test did, the kill did not reach it on Windows, and three orphans wrote 77 GB of temp files. Check that the children are dead, not only that the call returned.
+- **Kill by job object on Windows, not by parent link.** `taskkill /T` does not reliably reach processes Git Bash starts. `Shell` puts each command in a job object and ends the whole job; `Shell.close()` ends anything still running. Call `close()` on any `Shell` you create outside `loop.run`.
 - **`llm.py` and nothing else imports `anthropic`.** The loop depends on the `Model` interface.
 - **No agent framework and no embeddings.** Raw SDK calls and plain files.
 
@@ -79,3 +83,7 @@ Session data is written to `<workdir>/.ctx/sessions/<id>/` and benchmark output 
 ## Out of scope for now
 
 The notes graph (markdown nodes maintained across sessions, with staleness tracking), subagents, session resume, an OS sandbox and loading this file into the harness's own agent. These are later iterations.
+
+## Editing files in this repo from a shell
+
+Do not patch source files with a script passed through a shell heredoc when the patch contains backslash escapes such as `\n`: they have been silently turned into real newlines more than once, breaking the file. Use an editor or a direct file-edit tool.

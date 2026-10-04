@@ -632,3 +632,12 @@ Found by the first live runs (3 October 2026):
 - **Heredoc bodies written to a file are not scanned by the blocked-command check.** The model's notes about `safety.py` mentioned `mkfs` and were refused. Bodies fed to a shell (`bash <<EOF`) are still scanned.
 - **The urgent notice demands at most 30% of the limit as free room** (was 50%). At 50% it fired at 56% full.
 - **On Windows the system prompt warns about path translation.** The model wrote notes to `/tmp` from bash and then could not open them from native Python.
+
+Found while working through `AUDIT.md` (3 and 4 October 2026):
+
+- **Command output goes to a file, not a pipe.** With a pipe, a background job held the turn open until it exited, and large output was buffered whole in memory. The harness now waits on bash alone and polls the file's size, killing a command that passes `max_output_bytes`.
+- **On Windows, `taskkill /T` does not kill what Git Bash starts.** A timed-out `yes` kept running and three such orphans wrote 77 GB to the temp folder before the disk filled. Each command now starts suspended, is placed in its own job object, and is then resumed; a timeout or the output cap ends the whole job, and `Shell.close()` ends every job at the end of the run. The earlier timeout test only checked that the call returned, which is why it passed.
+- **`run` is split in two.** `run` owns the session's lifetime and always writes the `finish` event and `usage.json`, including on Ctrl+C or a harness error; `_turns` holds the loop.
+- **Cost is charged per call at the serving model's prices** (`Session.add_usage(usage, served_by)`), so a turn served by a fallback model is priced correctly. An unknown model is priced as Opus 5.5 and flagged as `price_estimated`.
+- **Secret handling is in `redact.py`.** Variables with secret-looking names are removed from the agent's environment; their values, `.env` values and common key formats are replaced in command output before it reaches the context, the transcript or a saved file.
+- **A repeated-command check was considered and left out.** In the stream benchmark the same command legitimately runs once per operation, so a naive "three identical commands" rule would fire constantly.
