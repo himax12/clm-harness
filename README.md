@@ -153,7 +153,47 @@ Hermes Agent and opencode can use model-managed context for their own sessions t
 
 ## How it works
 
-Each turn the harness sends the model a fresh request: a fixed system prompt, the task, and the context file, one block per turn record.
+### The parts
+
+The loop sits between four things: the model, a shell, the context file and the session record.
+
+```mermaid
+flowchart LR
+    U["You: a task"] --> L["Turn loop"]
+    L -- "system prompt + task + context blocks" --> M["Model"]
+    M -- "one bash command, or the final answer" --> L
+    L -- "runs the command" --> S["Shell: Git Bash or Docker sandbox"]
+    S -- "output" --> L
+    L -- "writes before each turn" --> F["Context file ($CTX)"]
+    S -. "the command may edit it" .-> F
+    F -- "read back and validated" --> L
+    L -- "appends every event" --> R["Session record: transcript, block originals, snapshots"]
+```
+
+### One turn
+
+Each turn the harness sends the model a fresh request: a fixed system prompt, the task, and the context file, one block per turn record. Nothing is kept on the provider's side between turns.
+
+```mermaid
+sequenceDiagram
+    participant H as Harness
+    participant F as Context file
+    participant M as Model
+    participant S as Shell
+    H->>F: write the current context
+    H->>M: system prompt, task, context blocks
+    M-->>H: one bash command
+    H->>H: refuse it if it is on the blocked list
+    H->>S: run the command
+    S->>F: the command may edit the file
+    S-->>H: output (secrets redacted, size capped)
+    H->>F: read the file back
+    H->>H: validate the edit: apply it whole or refuse it whole
+    H->>H: add the command, its output and a receipt as new blocks
+    Note over H,M: next turn, the model sees the edited context and the receipt
+```
+
+The context file looks like this:
 
 ```
 [[CTX v1]]
@@ -172,7 +212,48 @@ The model replies with one bash command. The file is available to that command a
 
 Either way the model gets a receipt on its next turn. The original text of every block stays in the session folder, so the model can read back anything it removed.
 
-The task and the user's messages cannot be edited. If the context still overflows, the harness drops the newest turns and tells the model which commands caused it.
+### How an edit is checked
+
+The model can write anything to the file. The harness decides whether it counts.
+
+```mermaid
+flowchart TD
+    A["Command finished: read the context file"] --> B{"Same as what the harness wrote?"}
+    B -- yes --> N["No edit. Nothing happens"]
+    B -- no --> C{"First line and every block header intact?"}
+    C -- no --> X["Refused"]
+    C -- yes --> D{"Every block id known, or a new note? No duplicates?"}
+    D -- no --> X
+    D -- yes --> E{"User messages unchanged and still present?"}
+    E -- no --> X
+    E -- yes --> G{"Over the limit and no smaller than before?"}
+    G -- yes --> X
+    G -- no --> OK["Applied: the file becomes the new context"]
+    OK --> SNAP["The blocks from before the edit are saved as a snapshot"]
+    X --> KEEP["The previous context is kept, untouched"]
+    SNAP --> RC["Receipt on the next turn: before and after size"]
+    KEEP --> RC2["Receipt on the next turn: the reason it was refused"]
+```
+
+### Staying under the limit
+
+The model is told its context size on every result, and the harness steps in only when the model lets it overflow.
+
+```mermaid
+flowchart TD
+    T["Start of a turn: measure the context"] --> Q{"Over the limit?"}
+    Q -- no --> W{"Passed 25%, 50% or 75%, or about to overflow?"}
+    W -- yes --> NOTE["Add a notice block telling the model its size"]
+    W -- no --> CALL["Call the model"]
+    NOTE --> CALL
+    CALL --> EDIT["The model may prune, shorten or annotate its own context"]
+    EDIT --> T
+    Q -- yes --> RB["Rollback: drop the newest turns until it fits"]
+    RB --> PIN["Pin a note naming the commands whose output overflowed"]
+    PIN --> T
+```
+
+The task and the user's messages cannot be edited, and a rollback never drops them. A run ends as `context_exhausted` if rollback cannot make the context fit.
 
 More detail: [AGENTS.md](AGENTS.md) describes each module and the rules the design depends on.
 
